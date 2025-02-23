@@ -3,17 +3,14 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import { Server } from 'http';
+import { SocketManager } from './config/socket';
+import { AppError } from './types/error';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize express
 const app = express();
-
-// Basic types for error handling
-interface AppError extends Error {
-  status?: number;
-}
 
 // Middleware
 app.use(cors());
@@ -56,6 +53,9 @@ const PORT = process.env.PORT || 3000;
 const server: Server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
 });
+
+// Initialize Socket.IO
+const socketManager = new SocketManager(server);
 
 // Basic error handling for the server
 server.on('error', (error: NodeJS.ErrnoException) => {
