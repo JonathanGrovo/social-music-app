@@ -5,27 +5,21 @@ import * as dotenv from 'dotenv';
 import { Server } from 'http';
 import { SocketManager } from './config/socket';
 import { AppError } from './types/error';
+import routes from './routes';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize express
-const app = express();
+export const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Basic health check route
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'healthy' });
-});
-
-// Basic room route placeholder
-app.get('/api/rooms', (req: Request, res: Response) => {
-  res.status(200).json({ message: 'Room endpoints coming soon' });
-});
+// Mount routes
+app.use(routes);
 
 // Error handling middleware
 app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
