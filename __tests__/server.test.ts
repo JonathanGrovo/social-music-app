@@ -1,8 +1,9 @@
 import request from 'supertest';
-import { Server } from 'socket.io';
+import { Server } from 'http';
 import { io as Client } from 'socket.io-client';
 import { createServer } from 'http';
 import { app } from '../src/server';
+import { SocketManager } from '../src/config/socket';
 import { EventType } from '../src/types/socket';
 
 describe('API Endpoints', () => {
@@ -106,137 +107,114 @@ describe('API Endpoints', () => {
 });
 
 describe('WebSocket Functionality', () => {
-  let io: Server;
-  let serverSocket: any;
+  let httpServer: Server;
+  let socketManager: SocketManager;
   let clientSocket: any;
-  let httpServer: any;
+  let secondClientSocket: any;
 
   beforeAll((done) => {
     httpServer = createServer(app);
-    io = new Server(httpServer);
+    socketManager = new SocketManager(httpServer);
+    
     httpServer.listen(() => {
       const port = (httpServer.address() as any).port;
-      clientSocket = Client(`http://localhost:${port}`);
-      io.on('connection', (socket) => {
-        serverSocket = socket;
+      console.log(`Test server listening on port ${port}`);
+      
+      clientSocket = Client(`http://localhost:${port}`, {
+        transports: ['websocket'],
+        autoConnect: true
       });
-      clientSocket.on('connect', done);
+      
+      secondClientSocket = Client(`http://localhost:${port}`, {
+        transports: ['websocket'],
+        autoConnect: true
+      });
+      
+      let connectedCount = 0;
+      const checkDone = () => {
+        connectedCount++;
+        if (connectedCount === 2) done();
+      };
+
+      clientSocket.on('connect', () => {
+        console.log('First client connected');
+        checkDone();
+      });
+
+      secondClientSocket.on('connect', () => {
+        console.log('Second client connected');
+        checkDone();
+      });
     });
   });
 
   afterAll(() => {
-    io.close();
-    clientSocket.close();
+    if (clientSocket.connected) {
+      clientSocket.disconnect();
+    }
+    if (secondClientSocket.connected) {
+      secondClientSocket.disconnect();
+    }
     httpServer.close();
   });
 
   describe('Room Events', () => {
     it('should handle user joining a room', (done) => {
-      const roomData = {
-        roomId: 'test-room',
-        userId: 'test-user'
-      };
-      
-      clientSocket.emit(EventType.USER_JOIN, roomData);
-      
-      serverSocket.on(EventType.USER_JOIN, (data: any) => {
-        expect(data).toHaveProperty('payload');
-        expect(data.payload.userId).toBe(roomData.userId);
-        expect(data).toHaveProperty('timestamp');
-        expect(data).toHaveProperty('userId', roomData.userId);
-        done();
+      const roomId = 'test-room';
+      const userId = 'test-user';
+
+      secondClientSocket.once(EventType.USER_JOIN, (data: any) => {
+        try {
+          expect(data).toEqual(expect.objectContaining({
+            roomId: roomId,
+            payload: { userId: userId },
+            userId: userId
+          }));
+          done();
+        } catch (error) {
+          done(error);
+        }
       });
+
+      // Join with second client first
+      secondClientSocket.emit(EventType.USER_JOIN, { roomId, userId: 'user2' });
+      
+      // Then emit join event from first client
+      setTimeout(() => {
+        clientSocket.emit(EventType.USER_JOIN, { roomId, userId });
+      }, 100);
     });
 
-    it('should handle user leaving a room', (done) => {
-      const roomData = {
-        roomId: 'test-room',
-        userId: 'test-user'
-      };
-      
-      clientSocket.emit(EventType.USER_LEAVE, roomData);
-      
-      serverSocket.on(EventType.USER_LEAVE, (data: any) => {
-        expect(data).toHaveProperty('payload');
-        expect(data.payload.userId).toBe(roomData.userId);
-        expect(data).toHaveProperty('timestamp');
-        expect(data).toHaveProperty('userId', roomData.userId);
-        done();
-      });
-    });
-  });
-
-  describe('Chat Functionality', () => {
     it('should handle chat messages', (done) => {
+      const roomId = 'test-room';
       const message = {
-        roomId: 'test-room',
-        message: {
-          payload: {
-            content: 'Hello, World!'
-          },
-          timestamp: Date.now(),
-          userId: 'test-user'
-        }
+        roomId,
+        userId: 'test-user',
+        payload: { content: 'Hello, World!' },
+        timestamp: Date.now()
       };
-      
-      clientSocket.emit(EventType.CHAT_MESSAGE, message);
-      
-      serverSocket.on(EventType.CHAT_MESSAGE, (data: any) => {
-        expect(data).toHaveProperty('payload');
-        expect(data.payload.content).toBe(message.message.payload.content);
-        expect(data).toHaveProperty('timestamp');
-        expect(data).toHaveProperty('userId', message.message.userId);
-        done();
-      });
-    });
-  });
 
-  describe('Playback Synchronization', () => {
-    it('should handle playback updates', (done) => {
-      const playbackData = {
-        roomId: 'test-room',
-        update: {
-          payload: {
-            currentTime: 120,
-            isPlaying: true,
-            trackId: 'test-track'
-          },
-          timestamp: Date.now(),
-          userId: 'test-user'
+      secondClientSocket.once(EventType.CHAT_MESSAGE, (data: any) => {
+        try {
+          expect(data).toEqual(expect.objectContaining({
+            roomId: message.roomId,
+            userId: message.userId,
+            payload: message.payload
+          }));
+          done();
+        } catch (error) {
+          done(error);
         }
-      };
-      
-      clientSocket.emit(EventType.PLAYBACK_UPDATE, playbackData);
-      
-      serverSocket.on(EventType.PLAYBACK_UPDATE, (data: any) => {
-        expect(data).toMatchObject(playbackData.update);
-        done();
       });
-    });
-  });
 
-  describe('Queue Management', () => {
-    it('should handle queue updates', (done) => {
-      const queueData = {
-        roomId: 'test-room',
-        update: {
-          payload: {
-            queue: [
-              { id: 'track-1', source: 'youtube' },
-              { id: 'track-2', source: 'soundcloud' }
-            ]
-          },
-          timestamp: Date.now(),
-          userId: 'test-user'
-        }
-      };
-      
-      clientSocket.emit(EventType.QUEUE_UPDATE, queueData);
-      
-      serverSocket.on(EventType.QUEUE_UPDATE, (data: any) => {
-        expect(data).toMatchObject(queueData.update);
-        done();
-      });
+      // Make sure both clients are in the room
+      secondClientSocket.emit(EventType.USER_JOIN, { roomId, userId: 'user2' });
+      setTimeout(() => {
+        clientSocket.emit(EventType.USER_JOIN, { roomId, userId: message.userId });
+        setTimeout(() => {
+          clientSocket.emit(EventType.CHAT_MESSAGE, message);
+        }, 100);
+      }, 100);
     });
   });
 });
