@@ -5,11 +5,11 @@ export enum EventType {
   CHAT_MESSAGE = 'CHAT_MESSAGE',
   USER_JOIN = 'USER_JOIN',
   USER_LEAVE = 'USER_LEAVE',
-  EFFECT_UPDATE = 'EFFECT_UPDATE',
   SYNC_REQUEST = 'SYNC_REQUEST',
   SYNC_RESPONSE = 'SYNC_RESPONSE'
 }
 
+// Base message interface
 export interface SocketMessage {
   roomId: string;
   payload: any;
@@ -17,10 +17,16 @@ export interface SocketMessage {
   userId: string;
 }
 
-// Optional: More specific message types for better type safety
+// Message types for better type safety
 export interface ChatMessage extends SocketMessage {
   payload: {
     content: string;
+  };
+}
+
+export interface UserMessage extends SocketMessage {
+  payload: {
+    userId: string;
   };
 }
 
@@ -29,6 +35,7 @@ export interface PlaybackMessage extends SocketMessage {
     currentTime: number;
     isPlaying: boolean;
     trackId: string;
+    source?: 'youtube' | 'soundcloud';
   };
 }
 
@@ -37,6 +44,37 @@ export interface QueueMessage extends SocketMessage {
     queue: Array<{
       id: string;
       source: 'youtube' | 'soundcloud';
+      title?: string;    // Optional metadata
+      thumbnail?: string; // Optional metadata
+      duration?: number;  // Optional metadata
     }>;
+  };
+}
+
+export interface SyncRequestMessage extends SocketMessage {
+  // Usually empty payload, just needs roomId and userId
+}
+
+export interface SyncResponseMessage extends SocketMessage {
+  payload: {
+    currentTrack?: {
+      id: string;
+      source: 'youtube' | 'soundcloud';
+      startTime: number;
+      isPlaying: boolean;
+    };
+    queue: Array<{
+      id: string;
+      source: 'youtube' | 'soundcloud';
+      title?: string;
+      thumbnail?: string;
+      duration?: number;
+    }>;
+    chatHistory: Array<{
+      userId: string;
+      content: string;
+      timestamp: number;
+    }>;
+    users: string[]; // List of users currently in the room
   };
 }

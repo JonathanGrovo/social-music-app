@@ -6,6 +6,7 @@ import { Server } from 'http';
 import { SocketManager } from './config/socket';
 import { AppError } from './types/error';
 import routes from './routes';
+import { setSocketManager } from './routes/rooms';
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +51,9 @@ const server: Server = app.listen(PORT, () => {
 
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
+
+// Connect SocketManager to routes
+setSocketManager(socketManager);
 
 // Basic error handling for the server
 server.on('error', (error: NodeJS.ErrnoException) => {
