@@ -3,19 +3,60 @@
 @tailwind utilities;
 
 :root {
+  /* Light theme (default) */
   --background: #ffffff;
   --foreground: #171717;
+  --card-background: #ffffff;
+  --primary: #3b82f6; /* blue-500 */
+  --primary-hover: #2563eb; /* blue-600 */
+  --secondary: #10b981; /* green-500 */
+  --secondary-hover: #059669; /* green-600 */
+  --muted: #e5e7eb; /* gray-200 */
+  --muted-foreground: #6b7280; /* gray-500 */
+  --accent: #f3f4f6; /* gray-100 */
+  --accent-foreground: #1f2937; /* gray-800 */
+  --border: #e5e7eb; /* gray-200 */
+  --input: #e5e7eb; /* gray-200 */
+  --ring: #3b82f6; /* blue-500 */
+  --message-own: #3b82f6; /* blue-500 */
+  --message-other: #e5e7eb; /* gray-200 */
+  --message-own-text: #ffffff;
+  --message-other-text: #171717;
+  --header-background: #3b82f6; /* blue-500 */
+  --header-text: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  /* Dark theme (Discord/Claude-like) */
+  --background: #313338; /* Discord dark bg */
+  --foreground: #e9eaec; /* Light text for dark mode */
+  --card-background: #2b2d31; /* Discord channel list bg */
+  --primary: #5865f2; /* Discord Blurple */
+  --primary-hover: #4752c4; /* Darker blurple */
+  --secondary: #3ba55c; /* Discord green */
+  --secondary-hover: #359453; /* Darker green */
+  --muted: #383a40; /* Slightly lighter than bg */
+  --muted-foreground: #949ba4; /* Gray text */
+  --accent: #414249; /* Slightly lighter than muted */
+  --accent-foreground: #e9eaec; /* Light text */
+  --border: #26282c; /* Darker than background */
+  --input: #1e1f22; /* Discord dark input */
+  --ring: #5865f2; /* Discord Blurple */
+  --message-own: #5865f2; /* Discord Blurple */
+  --message-other: #383a40; /* Dark bg for messages */
+  --message-own-text: #ffffff;
+  --message-other-text: #e9eaec;
+  --header-background: #1e1f22; /* Discord dark top bar */
+  --header-text: #e9eaec;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Add smooth transitions when switching themes */
+body, * {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

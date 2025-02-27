@@ -19,6 +19,7 @@ export function useSocket(roomId: string, userId: string) {
     console.log(`[Socket] ${message}`);
   }, []);
 
+  // In useSocket.ts, inside the first useEffect where you establish the connection:
   useEffect(() => {
     if (!userId || !roomId) {
       log('Missing userId or roomId, not connecting');
@@ -47,6 +48,19 @@ export function useSocket(roomId: string, userId: string) {
         timestamp: Date.now(),
         payload: {}
       });
+      
+      // Add a fallback for single user scenarios - if no sync response received quickly
+      setTimeout(() => {
+        if (roomState.users.length <= 1) {
+          log('Single user detected, ensuring proper sync state');
+          socketIo.emit(EventType.SYNC_REQUEST, { 
+            roomId,
+            userId,
+            timestamp: Date.now(),
+            payload: {}
+          });
+        }
+      }, 2000);
     });
 
     socketIo.on('disconnect', () => {

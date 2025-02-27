@@ -63,6 +63,7 @@ export class SocketManager {
       console.log('New socket connection:', socket.id);
 
       // Handle room joining
+      // In the USER_JOIN handler
       socket.on(EventType.USER_JOIN, (data: { roomId: string; userId: string }) => {
         console.log('User joining room:', data);
         const { roomId, userId } = data;
@@ -77,8 +78,8 @@ export class SocketManager {
         const roomState = this.getOrCreateRoomState(roomId);
         roomState.users.add(userId);
         
-        // Broadcast to everyone EXCEPT the sender
-        socket.to(roomId).emit(EventType.USER_JOIN, {
+        // Broadcast to everyone including the sender for a single user case
+        this.io.to(roomId).emit(EventType.USER_JOIN, {
           roomId,
           payload: { userId },
           timestamp: Date.now(),
@@ -137,17 +138,18 @@ export class SocketManager {
         // Update room state
         const roomState = this.getOrCreateRoomState(roomId);
         if (payload.trackId) {
+          // Ensure we're setting startTime correctly
           roomState.currentTrack = {
             id: payload.trackId,
             source: payload.source || 'youtube',
-            startTime: payload.currentTime || 0,
+            startTime: payload.currentTime || 0, // Use the exact time from the client
             isPlaying: payload.isPlaying,
-            timestamp: Date.now() // Record when this update happened
+            timestamp: Date.now() // Record when this update happened for future sync
           };
         }
         
-        // Broadcast to all other users in the room
-        socket.to(roomId).emit(EventType.PLAYBACK_UPDATE, message);
+        // Broadcast to all users in the room, including sender for single user case
+        this.io.to(roomId).emit(EventType.PLAYBACK_UPDATE, message);
       });
 
       // Handle queue updates

@@ -1,4 +1,3 @@
-// app/room/[roomId]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,6 +7,7 @@ import ChatBox from '../../../components/ChatBox';
 import PlayerControls from '../../../components/PlayerControls';
 import Queue from '../../../components/Queue';
 import RoomInfo from '../../../components/RoomInfo';
+import ThemeToggle from '../../../components/ThemeToggle';
 
 export default function RoomPage() {
   const params = useParams();
@@ -60,17 +60,20 @@ export default function RoomPage() {
   };
 
   if (!userId) {
-    return <div className="p-8 text-center">Loading...</div>;
+    return <div className="p-8 text-center text-foreground bg-background">Loading...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-blue-600 text-white p-4">
+    <div className="min-h-screen bg-background">
+      <header className="bg-header-bg text-header-text p-4">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-xl font-bold">Social Music Room</h1>
-          <div className="flex items-center">
-            <span className={`h-3 w-3 rounded-full ${connected ? 'bg-green-400' : 'bg-red-500'} mr-2`}></span>
-            <span>{connected ? 'Connected' : 'Disconnected'}</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <span className={`h-3 w-3 rounded-full ${connected ? 'bg-secondary' : 'bg-red-500'} mr-2`}></span>
+              <span>{connected ? 'Connected' : 'Disconnected'}</span>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -111,7 +114,7 @@ export default function RoomPage() {
         </div>
         
         {/* Debug panel */}
-        <div className="mt-4 p-2 bg-gray-800 text-white rounded text-xs font-mono max-h-32 overflow-y-auto">
+        <div className="mt-4 p-2 bg-muted text-foreground rounded text-xs font-mono max-h-32 overflow-y-auto">
           <p className="font-bold mb-1">Room Debug Log:</p>
           {debug.map((msg, i) => (
             <div key={i} className="mb-1">{msg}</div>

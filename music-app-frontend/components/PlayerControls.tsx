@@ -1,9 +1,11 @@
-// components/PlayerControls.tsx
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import ReactPlayer from 'react-player/youtube';
 import { QueueItem } from '../types';
+
+// TEST FLAG - Set to true to force unmuted autoplay for testing
+const FORCE_UNMUTED = true;
 
 interface PlayerControlsProps {
   currentTrack?: {
@@ -38,15 +40,15 @@ export default function PlayerControls({
     // Default to muted on first visit
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('videoMuted');
-      return stored === null ? true : stored === 'true';
+      return FORCE_UNMUTED ? false : stored === null ? true : stored === 'true';
     }
-    return true;
+    return FORCE_UNMUTED ? false : true;
   });
   
   // Autoplay detection system
-  const [isMuted, setIsMuted] = useState(true); // Start muted by default until we know more
-  const [autoplayTested, setAutoplayTested] = useState(false);
-  const [autoplayRequiresMute, setAutoplayRequiresMute] = useState(true);
+  const [isMuted, setIsMuted] = useState(FORCE_UNMUTED ? false : true); // Start muted by default until we know more
+  const [autoplayTested, setAutoplayTested] = useState(FORCE_UNMUTED);
+  const [autoplayRequiresMute, setAutoplayRequiresMute] = useState(!FORCE_UNMUTED);
   const [showMuteNotification, setShowMuteNotification] = useState(false);
   const [autoplayAttempted, setAutoplayAttempted] = useState(false);
   
@@ -61,15 +63,26 @@ export default function PlayerControls({
 
   // Save user preference when it changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !FORCE_UNMUTED) {
       localStorage.setItem('videoMuted', userPrefersMuted.toString());
       logDebug(`User preference saved: ${userPrefersMuted ? 'muted' : 'unmuted'}`);
+    } else if (FORCE_UNMUTED) {
+      logDebug('TESTING MODE: Forced unmuted mode active - preferences not saved');
     }
   }, [userPrefersMuted]);
 
   // Test autoplay capabilities when component mounts
   useEffect(() => {
     if (typeof window !== 'undefined' && !autoplayTested) {
+      if (FORCE_UNMUTED) {
+        // Skip real testing in force unmuted mode
+        logDebug('TESTING MODE: Forcing unmuted autoplay support');
+        setAutoplayRequiresMute(false);
+        setAutoplayTested(true);
+        setIsMuted(false);
+        return;
+      }
+      
       const testAutoplay = async () => {
         try {
           logDebug('Testing unmuted autoplay capability...');
@@ -131,6 +144,10 @@ export default function PlayerControls({
 
   // On component mount
   useEffect(() => {
+    if (FORCE_UNMUTED) {
+      logDebug('TESTING MODE: Forced unmuted mode active');
+    }
+    
     logDebug('PlayerControls mounted');
     logDebug(`Queue has ${queue.length} items (${youtubeQueue.length} YouTube)`);
     
@@ -149,17 +166,24 @@ export default function PlayerControls({
   useEffect(() => {
     if (currentTrack) {
       logDebug(`Current track updated: ${currentTrack.id} (${currentTrack.source})`);
+      logDebug(`Current track state: isPlaying=${currentTrack.isPlaying}, startTime=${currentTrack.startTime}`);
       setAutoplayAttempted(true);
       
-      // If user prefers unmuted but browser requires mute for autoplay
-      if (!userPrefersMuted && autoplayRequiresMute) {
-        setIsMuted(true);
-        setShowMuteNotification(true);
-        logDebug('Starting muted due to browser restrictions despite user preference');
+      if (FORCE_UNMUTED) {
+        // Force unmuted in test mode
+        setIsMuted(false);
+        logDebug('TESTING MODE: Forcing unmuted playback');
       } else {
-        // Apply user preference
-        setIsMuted(userPrefersMuted);
-        logDebug(`Applying user preference: ${userPrefersMuted ? 'muted' : 'unmuted'}`);
+        // If user prefers unmuted but browser requires mute for autoplay
+        if (!userPrefersMuted && autoplayRequiresMute) {
+          setIsMuted(true);
+          setShowMuteNotification(true);
+          logDebug('Starting muted due to browser restrictions despite user preference');
+        } else {
+          // Apply user preference
+          setIsMuted(userPrefersMuted);
+          logDebug(`Applying user preference: ${userPrefersMuted ? 'muted' : 'unmuted'}`);
+        }
       }
     } else {
       logDebug('Current track is null');
@@ -193,15 +217,19 @@ export default function PlayerControls({
         // Start playing the first track in queue
         onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
         
-        // Remove the track from the queue
-        const newQueue = [...queue];
-        const indexToRemove = newQueue.findIndex(item => 
-          item.id === nextTrack.id && item.source === 'youtube'
-        );
-        if (indexToRemove !== -1) {
-          newQueue.splice(indexToRemove, 1);
-          onUpdateQueue(newQueue);
-        }
+        // Delay queue update to ensure playback starts
+        setTimeout(() => {
+          logDebug('Removing played track from queue after delay');
+          // Remove the track from the queue
+          const newQueue = [...queue];
+          const indexToRemove = newQueue.findIndex(item => 
+            item.id === nextTrack.id && item.source === 'youtube'
+          );
+          if (indexToRemove !== -1) {
+            newQueue.splice(indexToRemove, 1);
+            onUpdateQueue(newQueue);
+          }
+        }, 1500);
         
         return true;
       }
@@ -235,6 +263,9 @@ export default function PlayerControls({
   
   const handlePlay = () => {
     logDebug('Play button clicked');
+    logDebug(`Current track: ${currentTrack ? JSON.stringify(currentTrack) : 'null'}`);
+    logDebug(`Queue length: ${youtubeQueue.length}`);
+    
     setLocalIsPlaying(true);
     if (currentTrack) {
       onPlaybackUpdate(
@@ -250,15 +281,19 @@ export default function PlayerControls({
       
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
       
-      // Remove from queue
-      const newQueue = [...queue];
-      const indexToRemove = newQueue.findIndex(item => 
-        item.id === nextTrack.id && item.source === 'youtube'
-      );
-      if (indexToRemove !== -1) {
-        newQueue.splice(indexToRemove, 1);
-        onUpdateQueue(newQueue);
-      }
+      // Delay removing from queue to ensure playback starts properly
+      setTimeout(() => {
+        logDebug('Removing played track from queue after delay');
+        // Remove from queue
+        const newQueue = [...queue];
+        const indexToRemove = newQueue.findIndex(item => 
+          item.id === nextTrack.id && item.source === 'youtube'
+        );
+        if (indexToRemove !== -1) {
+          newQueue.splice(indexToRemove, 1);
+          onUpdateQueue(newQueue);
+        }
+      }, 1500);
     }
   };
   
@@ -319,15 +354,19 @@ export default function PlayerControls({
       // Start playing the next track
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
       
-      // Remove the played track from the queue
-      const newQueue = [...queue];
-      const indexToRemove = newQueue.findIndex(item => 
-        item.id === nextTrack.id && item.source === 'youtube'
-      );
-      if (indexToRemove !== -1) {
-        newQueue.splice(indexToRemove, 1);
-        onUpdateQueue(newQueue);
-      }
+      // Delay removing from queue to ensure playback starts properly
+      setTimeout(() => {
+        logDebug('Removing next track from queue after delay');
+        // Remove the played track from the queue
+        const newQueue = [...queue];
+        const indexToRemove = newQueue.findIndex(item => 
+          item.id === nextTrack.id && item.source === 'youtube'
+        );
+        if (indexToRemove !== -1) {
+          newQueue.splice(indexToRemove, 1);
+          onUpdateQueue(newQueue);
+        }
+      }, 1500);
     } else {
       // No more tracks in queue, stop playback
       logDebug('No more tracks in queue');
@@ -345,6 +384,10 @@ export default function PlayerControls({
 
   const handleReady = (player: any) => {
     logDebug("Player is ready");
+    logDebug(`Current URL: ${getVideoUrl()}`);
+    logDebug(`Current queue length: ${youtubeQueue.length}`);
+    logDebug(`Current track: ${currentTrack ? JSON.stringify(currentTrack) : 'null'}`);
+    
     setPlayerReady(true);
     setPlayerError(null);
     
@@ -376,15 +419,18 @@ export default function PlayerControls({
       setTimeout(() => {
         onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
         
-        // Remove the failed track from the queue
-        const newQueue = [...queue];
-        const indexToRemove = newQueue.findIndex(item => 
-          item.id === nextTrack.id && item.source === 'youtube'
-        );
-        if (indexToRemove !== -1) {
-          newQueue.splice(indexToRemove, 1);
-          onUpdateQueue(newQueue);
-        }
+        // Remove the failed track from the queue after a delay
+        setTimeout(() => {
+          logDebug('Removing failed track from queue after delay');
+          const newQueue = [...queue];
+          const indexToRemove = newQueue.findIndex(item => 
+            item.id === nextTrack.id && item.source === 'youtube'
+          );
+          if (indexToRemove !== -1) {
+            newQueue.splice(indexToRemove, 1);
+            onUpdateQueue(newQueue);
+          }
+        }, 1500);
       }, 1000);
     }
   };
@@ -405,15 +451,19 @@ export default function PlayerControls({
       // Start playing the next track
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
       
-      // Remove the track from the queue
-      const newQueue = [...queue];
-      const indexToRemove = newQueue.findIndex(item => 
-        item.id === nextTrack.id && item.source === 'youtube'
-      );
-      if (indexToRemove !== -1) {
-        newQueue.splice(indexToRemove, 1);
-        onUpdateQueue(newQueue);
-      }
+      // Delay removing from queue to ensure playback starts properly
+      setTimeout(() => {
+        logDebug('Removing skipped-to track from queue after delay');
+        // Remove the track from the queue
+        const newQueue = [...queue];
+        const indexToRemove = newQueue.findIndex(item => 
+          item.id === nextTrack.id && item.source === 'youtube'
+        );
+        if (indexToRemove !== -1) {
+          newQueue.splice(indexToRemove, 1);
+          onUpdateQueue(newQueue);
+        }
+      }, 1500);
     }
   };
 
@@ -426,20 +476,31 @@ export default function PlayerControls({
       // Start playing the first track
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
       
-      // Remove the track from the queue
-      const newQueue = [...queue];
-      const indexToRemove = newQueue.findIndex(item => 
-        item.id === nextTrack.id && item.source === 'youtube'
-      );
-      if (indexToRemove !== -1) {
-        newQueue.splice(indexToRemove, 1);
-        onUpdateQueue(newQueue);
-      }
+      // Delay removing from queue to ensure playback starts properly
+      setTimeout(() => {
+        logDebug('Removing manually played track from queue after delay');
+        // Remove the track from the queue
+        const newQueue = [...queue];
+        const indexToRemove = newQueue.findIndex(item => 
+          item.id === nextTrack.id && item.source === 'youtube'
+        );
+        if (indexToRemove !== -1) {
+          newQueue.splice(indexToRemove, 1);
+          onUpdateQueue(newQueue);
+        }
+      }, 1500);
     }
   };
 
   // Toggle mute state
   const toggleMute = () => {
+    if (FORCE_UNMUTED) {
+      // In test mode, always unmute, but still log
+      logDebug('TESTING MODE: Forcing unmuted state (toggle ignored)');
+      setIsMuted(false);
+      return;
+    }
+    
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     setUserPrefersMuted(newMutedState); // Save preference
@@ -453,17 +514,24 @@ export default function PlayerControls({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md">
+    <div className="bg-card p-4 rounded-lg shadow-md border border-border">
+      {/* Testing Mode Indicator */}
+      {FORCE_UNMUTED && (
+        <div className="bg-yellow-500 text-black p-3 mb-4 rounded flex justify-between items-center">
+          <span className="font-bold">TESTING MODE: Forced unmuted playback</span>
+        </div>
+      )}
+      
       {/* Notification for auto-mute */}
-      {showMuteNotification && (
-        <div className="bg-blue-100 text-blue-800 p-3 mb-4 rounded flex justify-between items-center">
+      {showMuteNotification && !FORCE_UNMUTED && (
+        <div className="bg-accent text-accent-foreground p-3 mb-4 rounded flex justify-between items-center">
           <div className="flex items-center">
             <span className="mr-2">🔊</span>
             <span>Video started muted due to browser restrictions. Click unmute to hear audio.</span>
           </div>
           <button 
             onClick={dismissNotification} 
-            className="text-blue-500 hover:text-blue-700"
+            className="text-primary hover:text-primary-hover"
           >
             ✕
           </button>
@@ -498,7 +566,7 @@ export default function PlayerControls({
             />
             
             {/* Mute/Unmute button overlay */}
-            {isMuted && (
+            {isMuted && !FORCE_UNMUTED && (
               <div className="absolute bottom-4 right-4 z-10">
                 <button
                   onClick={toggleMute}
@@ -525,32 +593,34 @@ export default function PlayerControls({
       {currentTrack ? (
         <>
           <div className="mb-2">
-            <p className="font-semibold text-lg">{videoTitle || 'YouTube Video'}</p>
-            <p className="text-gray-600 text-sm">{currentTrack.id}</p>
+            <p className="font-semibold text-lg text-foreground">{videoTitle || 'YouTube Video'}</p>
+            <p className="text-muted-foreground text-sm">{currentTrack.id}</p>
           </div>
           
           <div className="flex items-center space-x-4 mb-2">
             <button
               onClick={() => localIsPlaying ? handlePause() : handlePlay()}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full"
+              className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-full"
             >
               {localIsPlaying ? 'Pause' : 'Play'}
             </button>
             
             <button
               onClick={skipToNext}
-              className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-full disabled:opacity-50"
+              className="bg-muted hover:bg-accent text-foreground px-4 py-2 rounded-full disabled:opacity-50"
               disabled={youtubeQueue.length === 0}
             >
               Skip
             </button>
             
-            <button
-              onClick={toggleMute}
-              className={`${isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 hover:bg-gray-400'} ${isMuted ? 'text-white' : 'text-gray-800'} px-4 py-2 rounded-full`}
-            >
-              {isMuted ? 'Unmute' : 'Mute'}
-            </button>
+            {!FORCE_UNMUTED && (
+              <button
+                onClick={toggleMute}
+                className={`${isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-muted hover:bg-accent'} ${isMuted ? 'text-white' : 'text-foreground'} px-4 py-2 rounded-full`}
+              >
+                {isMuted ? 'Unmute' : 'Mute'}
+              </button>
+            )}
           </div>
           
           <div className="flex-1">
@@ -567,7 +637,7 @@ export default function PlayerControls({
               onTouchEnd={handleSeekEnd}
               className="w-full"
             />
-            <div className="flex justify-between text-sm text-gray-500">
+            <div className="flex justify-between text-sm text-muted-foreground">
               <span>{formatTime(playbackPosition)}</span>
               <span>{formatTime(duration)}</span>
             </div>
@@ -575,15 +645,15 @@ export default function PlayerControls({
         </>
       ) : (
         <div className="text-center py-4">
-          <p className="text-gray-500">No video is currently playing</p>
+          <p className="text-muted-foreground">No video is currently playing</p>
           {youtubeQueue.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm text-gray-600 mb-2">
+              <p className="text-sm text-muted-foreground mb-2">
                 {youtubeQueue.length} video(s) in queue
               </p>
               <button
                 onClick={playFromQueue}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full"
+                className="bg-secondary hover:bg-secondary-hover text-white px-4 py-2 rounded-full"
               >
                 Play From Queue
               </button>
@@ -593,9 +663,9 @@ export default function PlayerControls({
       )}
       
       {/* Audio autoplay status */}
-      {autoplayTested && (
-        <div className="mt-3 text-xs text-gray-600 flex items-center">
-          <div className={`h-2 w-2 rounded-full mr-1 ${autoplayRequiresMute ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+      {autoplayTested && !FORCE_UNMUTED && (
+        <div className="mt-3 text-xs text-muted-foreground flex items-center">
+          <div className={`h-2 w-2 rounded-full mr-1 ${autoplayRequiresMute ? 'bg-yellow-500' : 'bg-secondary'}`}></div>
           <span>
             {autoplayRequiresMute 
               ? 'This browser requires user interaction for unmuted playback' 
@@ -604,10 +674,19 @@ export default function PlayerControls({
         </div>
       )}
       
+      {FORCE_UNMUTED && (
+        <div className="mt-3 text-xs text-yellow-500 flex items-center">
+          <div className="h-2 w-2 rounded-full mr-1 bg-yellow-500"></div>
+          <span>
+            Testing mode: Forcing unmuted playback regardless of browser policy
+          </span>
+        </div>
+      )}
+      
       {/* Debug panel */}
-      <div className="mt-4 p-2 bg-gray-100 rounded text-xs font-mono h-24 overflow-y-auto">
-        <p className="font-bold mb-1">Debug Info:</p>
-        <pre className="whitespace-pre-wrap">{debugInfo}</pre>
+      <div className="mt-4 p-2 bg-muted rounded text-xs font-mono h-24 overflow-y-auto">
+        <p className="font-bold mb-1 text-foreground">Debug Info:</p>
+        <pre className="whitespace-pre-wrap text-muted-foreground">{debugInfo}</pre>
       </div>
     </div>
   );

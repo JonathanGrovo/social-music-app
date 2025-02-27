@@ -1,4 +1,3 @@
-// components/Queue.tsx
 'use client';
 
 import { useState } from 'react';
@@ -77,8 +76,8 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
   const youtubeQueue = queue.filter(item => item.source === 'youtube');
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
-      <h2 className="text-lg font-semibold mb-4">YouTube Queue</h2>
+    <div className="bg-card rounded-lg shadow-md p-4 border border-border">
+      <h2 className="text-lg font-semibold mb-4 text-foreground">YouTube Queue</h2>
       
       {error && (
         <div className="bg-red-100 text-red-700 p-2 rounded mb-4">
@@ -91,36 +90,36 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
           type="text"
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
-          className="flex-1 border rounded-l px-3 py-2"
+          className="flex-1 border rounded-l px-3 py-2 bg-input text-foreground border-border focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="YouTube URL or video ID"
         />
         <button
           onClick={addToQueue}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-r"
+          className="bg-secondary hover:bg-secondary-hover text-white px-4 py-2 rounded-r"
         >
           Add
         </button>
       </div>
 
       <div className="mb-4">
-        <h3 className="text-sm font-semibold mb-2">Example URLs:</h3>
-        <p className="text-xs text-gray-600">https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
-        <p className="text-xs text-gray-600">https://youtu.be/dQw4w9WgXcQ</p>
-        <p className="text-xs text-gray-600">Or just paste the video ID: dQw4w9WgXcQ</p>
+        <h3 className="text-sm font-semibold mb-2 text-foreground">Example URLs:</h3>
+        <p className="text-xs text-muted-foreground">https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
+        <p className="text-xs text-muted-foreground">https://youtu.be/dQw4w9WgXcQ</p>
+        <p className="text-xs text-muted-foreground">Or just paste the video ID: dQw4w9WgXcQ</p>
       </div>
       
       {youtubeQueue.length === 0 ? (
-        <p className="text-gray-500 text-center py-4">Queue is empty</p>
+        <p className="text-muted-foreground text-center py-4">Queue is empty</p>
       ) : (
         <div>
-          <h3 className="font-medium text-gray-700 mb-2">Up Next ({youtubeQueue.length})</h3>
-          <ul className="divide-y">
+          <h3 className="font-medium text-foreground mb-2">Up Next ({youtubeQueue.length})</h3>
+          <ul className="divide-y divide-border">
             {youtubeQueue.map((item, index) => (
               <li key={index} className="py-2">
                 <div className="flex justify-between items-center">
                   <div className="truncate flex-1 pr-2">
-                    <p className="font-medium truncate">{item.title || `Video: ${item.id}`}</p>
-                    <p className="text-sm text-gray-500">YouTube</p>
+                    <p className="font-medium truncate text-foreground">{item.title || `Video: ${item.id}`}</p>
+                    <p className="text-sm text-muted-foreground">YouTube</p>
                   </div>
                   <button
                     onClick={() => removeFromQueue(queue.findIndex(q => q.id === item.id && q.source === item.source))}
