@@ -1,3 +1,4 @@
+// components/Queue.tsx
 'use client';
 
 import { useState } from 'react';
@@ -14,41 +15,50 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
 
   const addToQueue = () => {
     if (!videoUrl.trim()) {
-      setError('Please enter a valid URL');
+      setError('Please enter a valid YouTube URL');
       return;
     }
 
     try {
       // Extract YouTube video ID
       let videoId = '';
-      let source: 'youtube' | 'soundcloud' = 'youtube';
       
       if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
         // YouTube
-        const url = new URL(videoUrl);
         if (videoUrl.includes('youtube.com/watch')) {
+          const url = new URL(videoUrl);
           videoId = url.searchParams.get('v') || '';
         } else if (videoUrl.includes('youtu.be/')) {
           videoId = videoUrl.split('youtu.be/')[1].split('?')[0];
+        } else if (videoUrl.includes('youtube.com/embed/')) {
+          videoId = videoUrl.split('youtube.com/embed/')[1].split('?')[0];
+        } else if (videoUrl.includes('youtube.com/shorts/')) {
+          videoId = videoUrl.split('youtube.com/shorts/')[1].split('?')[0];
         }
-        source = 'youtube';
-      } else if (videoUrl.includes('soundcloud.com')) {
-        // SoundCloud - just store the full path
-        videoId = videoUrl.split('soundcloud.com/')[1];
-        source = 'soundcloud';
+      } else {
+        // Try to treat input as a direct YouTube ID if it's 11 characters long
+        const directId = videoUrl.trim();
+        if (/^[a-zA-Z0-9_-]{11}$/.test(directId)) {
+          videoId = directId;
+        } else {
+          setError('Unsupported URL format. Please use a YouTube URL or video ID.');
+          return;
+        }
       }
 
       if (!videoId) {
-        setError('Could not extract video ID from URL');
+        setError('Could not extract YouTube video ID from URL');
         return;
       }
 
+      // Create new queue item
       const newItem: QueueItem = {
         id: videoId,
-        source: source,
-        title: `${source}: ${videoId}` // This would ideally fetch the actual title
+        source: 'youtube',
+        title: `YouTube Video (${videoId})` // This will be updated with actual title when played
       };
 
+      // Add to queue
       onUpdateQueue([...queue, newItem]);
       setVideoUrl('');
       setError('');
@@ -63,9 +73,12 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
     onUpdateQueue(newQueue);
   };
 
+  // Filter to only show YouTube videos in the queue
+  const youtubeQueue = queue.filter(item => item.source === 'youtube');
+
   return (
-    <div className="bg-white rounded-lg p-4">
-      <h2 className="text-lg font-semibold mb-4">Queue</h2>
+    <div className="bg-white rounded-lg shadow-md p-4">
+      <h2 className="text-lg font-semibold mb-4">YouTube Queue</h2>
       
       {error && (
         <div className="bg-red-100 text-red-700 p-2 rounded mb-4">
@@ -79,37 +92,47 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
           className="flex-1 border rounded-l px-3 py-2"
-          placeholder="YouTube or SoundCloud URL"
+          placeholder="YouTube URL or video ID"
         />
         <button
           onClick={addToQueue}
-          className="bg-green-500 text-white px-4 py-2 rounded-r"
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-r"
         >
           Add
         </button>
       </div>
+
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold mb-2">Example URLs:</h3>
+        <p className="text-xs text-gray-600">https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
+        <p className="text-xs text-gray-600">https://youtu.be/dQw4w9WgXcQ</p>
+        <p className="text-xs text-gray-600">Or just paste the video ID: dQw4w9WgXcQ</p>
+      </div>
       
-      {queue.length === 0 ? (
+      {youtubeQueue.length === 0 ? (
         <p className="text-gray-500 text-center py-4">Queue is empty</p>
       ) : (
-        <ul className="divide-y">
-          {queue.map((item, index) => (
-            <li key={index} className="py-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">{item.title || item.id}</p>
-                  <p className="text-sm text-gray-500">{item.source}</p>
+        <div>
+          <h3 className="font-medium text-gray-700 mb-2">Up Next ({youtubeQueue.length})</h3>
+          <ul className="divide-y">
+            {youtubeQueue.map((item, index) => (
+              <li key={index} className="py-2">
+                <div className="flex justify-between items-center">
+                  <div className="truncate flex-1 pr-2">
+                    <p className="font-medium truncate">{item.title || `Video: ${item.id}`}</p>
+                    <p className="text-sm text-gray-500">YouTube</p>
+                  </div>
+                  <button
+                    onClick={() => removeFromQueue(queue.findIndex(q => q.id === item.id && q.source === item.source))}
+                    className="text-red-500 hover:text-red-700 flex-shrink-0"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeFromQueue(index)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

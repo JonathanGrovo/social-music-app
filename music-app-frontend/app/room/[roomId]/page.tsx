@@ -1,3 +1,4 @@
+// app/room/[roomId]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -13,19 +14,50 @@ export default function RoomPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string>('');
   const roomId = params.roomId as string;
+  const [debug, setDebug] = useState<string[]>([]);
+  
+  // Debug logging
+  const logDebug = (message: string) => {
+    console.log(`[Room] ${message}`);
+    setDebug(prev => [message, ...prev].slice(0, 20));
+  };
   
   // Get user ID from localStorage
   useEffect(() => {
     const storedUserId = localStorage.getItem('userId');
     if (!storedUserId) {
+      logDebug('No userId found, redirecting to home');
       router.push('/');
     } else {
+      logDebug(`User ID loaded: ${storedUserId}`);
       setUserId(storedUserId);
     }
   }, [router]);
 
   // Socket connection
   const { connected, roomState, sendChatMessage, updatePlayback, updateQueue } = useSocket(roomId, userId);
+  
+  // Log room state changes
+  useEffect(() => {
+    if (userId) {
+      logDebug(`Room state updated: ${connected ? 'connected' : 'disconnected'}`);
+      logDebug(`Users in room: ${roomState.users.length}`);
+      logDebug(`Queue items: ${roomState.queue.length}`);
+      logDebug(`Current track: ${roomState.currentTrack ? roomState.currentTrack.id : 'none'}`);
+    }
+  }, [roomState, connected, userId]);
+  
+  // Enhanced updateQueue with logging
+  const handleUpdateQueue = (newQueue: any[]) => {
+    logDebug(`Updating queue: ${newQueue.length} items`);
+    updateQueue(newQueue);
+  };
+  
+  // Enhanced updatePlayback with logging
+  const handlePlaybackUpdate = (currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud') => {
+    logDebug(`Playback update: ${trackId} (${source}) at ${currentTime}s, playing: ${isPlaying}`);
+    updatePlayback(currentTime, isPlaying, trackId, source);
+  };
 
   if (!userId) {
     return <div className="p-8 text-center">Loading...</div>;
@@ -54,7 +86,7 @@ export default function RoomPage() {
             />
             <Queue 
               queue={roomState.queue}
-              onUpdateQueue={updateQueue}
+              onUpdateQueue={handleUpdateQueue}
             />
           </div>
           
@@ -62,7 +94,9 @@ export default function RoomPage() {
           <div className="lg:col-span-1">
             <PlayerControls
               currentTrack={roomState.currentTrack}
-              onPlaybackUpdate={updatePlayback}
+              queue={roomState.queue}
+              onPlaybackUpdate={handlePlaybackUpdate}
+              onUpdateQueue={handleUpdateQueue}
             />
           </div>
           
@@ -74,6 +108,14 @@ export default function RoomPage() {
               username={userId}
             />
           </div>
+        </div>
+        
+        {/* Debug panel */}
+        <div className="mt-4 p-2 bg-gray-800 text-white rounded text-xs font-mono max-h-32 overflow-y-auto">
+          <p className="font-bold mb-1">Room Debug Log:</p>
+          {debug.map((msg, i) => (
+            <div key={i} className="mb-1">{msg}</div>
+          ))}
         </div>
       </main>
     </div>
