@@ -2,125 +2,85 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useSocket } from '../../../hooks/useSocket';
-import ChatBox from '../../../components/ChatBox';
-import PlayerControls from '../../../components/PlayerControls';
-import Queue from '../../../components/Queue';
-import RoomInfo from '../../../components/RoomInfo';
-import ThemeToggle from '../../../components/ThemeToggle';
+import { generateUsername } from '../../../utils/username';
 
-export default function RoomPage() {
+export default function JoinRoomPage() {
   const params = useParams();
   const router = useRouter();
-  const [userId, setUserId] = useState<string>('');
-  const roomId = params.roomId as string;
-  const [debug, setDebug] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Debug logging
-  const logDebug = (message: string) => {
-    console.log(`[Room] ${message}`);
-    setDebug(prev => [message, ...prev].slice(0, 20));
-  };
-  
-  // Get user ID from localStorage
   useEffect(() => {
-    const storedUserId = localStorage.getItem('userId');
-    if (!storedUserId) {
-      logDebug('No userId found, redirecting to home');
-      router.push('/');
-    } else {
-      logDebug(`User ID loaded: ${storedUserId}`);
-      setUserId(storedUserId);
-    }
-  }, [router]);
-
-  // Socket connection
-  const { connected, roomState, sendChatMessage, updatePlayback, updateQueue } = useSocket(roomId, userId);
-  
-  // Log room state changes
-  useEffect(() => {
-    if (userId) {
-      logDebug(`Room state updated: ${connected ? 'connected' : 'disconnected'}`);
-      logDebug(`Users in room: ${roomState.users.length}`);
-      logDebug(`Queue items: ${roomState.queue.length}`);
-      logDebug(`Current track: ${roomState.currentTrack ? roomState.currentTrack.id : 'none'}`);
-    }
-  }, [roomState, connected, userId]);
-  
-  // Enhanced updateQueue with logging
-  const handleUpdateQueue = (newQueue: any[]) => {
-    logDebug(`Updating queue: ${newQueue.length} items`);
-    updateQueue(newQueue);
-  };
-  
-  // Enhanced updatePlayback with logging
-  const handlePlaybackUpdate = (currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud') => {
-    logDebug(`Playback update: ${trackId} (${source}) at ${currentTime}s, playing: ${isPlaying}`);
-    updatePlayback(currentTime, isPlaying, trackId, source);
-  };
-
-  if (!userId) {
-    return <div className="p-8 text-center text-foreground bg-background">Loading...</div>;
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-header-bg text-header-text p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold">Social Music Room</h1>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <span className={`h-3 w-3 rounded-full ${connected ? 'bg-secondary' : 'bg-red-500'} mr-2`}></span>
-              <span>{connected ? 'Connected' : 'Disconnected'}</span>
-            </div>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
-      
-      <main className="container mx-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left column: Room info and queue */}
-          <div className="space-y-4">
-            <RoomInfo 
-              roomId={roomId} 
-              users={roomState.users} 
-              currentUser={userId}
-            />
-            <Queue 
-              queue={roomState.queue}
-              onUpdateQueue={handleUpdateQueue}
-            />
-          </div>
-          
-          {/* Middle column: Player */}
-          <div className="lg:col-span-1">
-            <PlayerControls
-              currentTrack={roomState.currentTrack}
-              queue={roomState.queue}
-              onPlaybackUpdate={handlePlaybackUpdate}
-              onUpdateQueue={handleUpdateQueue}
-            />
-          </div>
-          
-          {/* Right column: Chat */}
-          <div className="h-[70vh]">
-            <ChatBox
-              messages={roomState.chatHistory}
-              onSendMessage={sendChatMessage}
-              username={userId}
-            />
-          </div>
-        </div>
+    async function joinRoom() {
+      try {
+        const roomId = params.roomId as string;
         
-        {/* Debug panel */}
-        <div className="mt-4 p-2 bg-muted text-foreground rounded text-xs font-mono max-h-32 overflow-y-auto">
-          <p className="font-bold mb-1">Room Debug Log:</p>
-          {debug.map((msg, i) => (
-            <div key={i} className="mb-1">{msg}</div>
-          ))}
+        // Check if room exists - optional but recommended
+        try {
+          const response = await fetch(`http://localhost:3000/api/rooms/${roomId}`);
+          
+          if (!response.ok) {
+            setError('Room not found or no longer available');
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Error checking room:', err);
+          // Don't fail here, we'll try to join anyway
+        }
+        
+        // Get username from localStorage or generate a new one
+        let username = localStorage.getItem('userId');
+        if (!username) {
+          username = generateUsername();
+          localStorage.setItem('userId', username);
+        }
+        
+        // Create a unique client ID if it doesn't exist
+        let clientId = localStorage.getItem('clientId');
+        if (!clientId) {
+          clientId = `${username}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          localStorage.setItem('clientId', clientId);
+        }
+        
+        console.log(`Joining room ${roomId} as ${username} (${clientId})`);
+        
+        // Navigate to the room - we'll use a different page/component for actual room content
+        window.location.href = `/room-content/${roomId}`;
+      } catch (err) {
+        console.error('Error joining room:', err);
+        setError('Error joining room. Please try again.');
+        setLoading(false);
+      }
+    }
+    
+    joinRoom();
+  }, [params.roomId, router]);
+  
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="bg-card p-8 rounded-lg shadow-md max-w-md w-full">
+          <h1 className="text-xl font-semibold text-foreground mb-4">Unable to Join Room</h1>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <button
+            onClick={() => router.push('/')}
+            className="w-full bg-primary text-white py-2 rounded hover:bg-primary-hover"
+          >
+            Return to Home
+          </button>
         </div>
-      </main>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="bg-card p-8 rounded-lg shadow-md max-w-md w-full text-center">
+        <h1 className="text-xl font-semibold text-foreground mb-4">Joining Room...</h1>
+        <div className="animate-pulse h-2 bg-primary rounded w-full max-w-xs mx-auto"></div>
+        <p className="text-muted-foreground mt-4">Setting up your randomly generated username...</p>
+      </div>
     </div>
   );
 }

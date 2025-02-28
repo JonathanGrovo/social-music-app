@@ -12,6 +12,9 @@ interface ChatBoxProps {
 export default function ChatBox({ messages, onSendMessage, username }: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const prevMessagesLengthRef = useRef(messages.length);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -29,26 +32,53 @@ export default function ChatBox({ messages, onSendMessage, username }: ChatBoxPr
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    // Only auto-scroll if messages were added (not on username changes)
+    if (autoScroll && messagesEndRef.current && messages.length > prevMessagesLengthRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    
+    // Update length ref
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, autoScroll]);
+  
+  // Detect when user manually scrolls up to disable auto-scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    const handleScroll = () => {
+      // If we're more than 100px from the bottom, disable auto-scroll
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      if (autoScroll !== isNearBottom) {
+        setAutoScroll(isNearBottom);
+      }
+    };
+    
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [autoScroll]);
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-lg shadow-md overflow-hidden border border-border">
+    <div className="flex flex-col h-[400px] bg-card rounded-lg shadow-md overflow-hidden border border-border">
       <div className="bg-muted py-3 px-4 border-b border-border">
         <h2 className="font-semibold text-foreground">Chat</h2>
       </div>
       
-      <div className="overflow-y-auto flex-1 p-4">
+      <div 
+        ref={messagesContainerRef}
+        className="overflow-y-auto flex-1 p-4"
+        style={{ overflowAnchor: 'auto' }}
+      >
         {messages.map((msg, index) => (
           <div
-            key={index}
+            key={`${msg.userId}-${index}-${msg.timestamp}`}
             className={`mb-2 ${msg.userId === username ? 'text-right' : ''}`}
           >
             <div
               className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
                 msg.userId === username
-                  ? 'bg-message-own text-message-ownText'
-                  : 'bg-message-other text-message-otherText'
+                  ? 'bg-message-own text-message-own-text'
+                  : 'bg-message-other text-message-other-text'
               }`}
             >
               <div className="font-semibold text-xs mb-1">
@@ -72,6 +102,7 @@ export default function ChatBox({ messages, onSendMessage, username }: ChatBoxPr
             placeholder="Type a message..."
           />
           <button
+            type="button" 
             onClick={handleSend}
             className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-r"
           >

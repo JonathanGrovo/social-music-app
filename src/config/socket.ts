@@ -24,8 +24,8 @@ interface RoomState {
     content: string;
     timestamp: number;
   }>;
-  // Track active users
-  users: Set<string>; 
+  // Track active users with client IDs
+  users: Map<string, Set<string>>; // Map of userId -> Set of clientIds 
 }
 
 export class SocketManager {
@@ -33,7 +33,7 @@ export class SocketManager {
   // Track room states for synchronization and history
   private roomStates: Map<string, RoomState> = new Map();
   // Track which socket belongs to which user and room
-  private socketToUser: Map<string, { userId: string, roomId: string }> = new Map();
+  private socketToUser: Map<string, { userId: string, clientId: string, roomId: string }> = new Map();
   
   constructor(server: HTTPServer) {
     this.io = new Server(server, {
@@ -52,7 +52,7 @@ export class SocketManager {
       this.roomStates.set(roomId, { 
         queue: [],
         chatHistory: [],
-        users: new Set<string>()
+        users: new Map<string, Set<string>>()
       });
     }
     return this.roomStates.get(roomId)!;
@@ -61,29 +61,44 @@ export class SocketManager {
   private initialize() {
     this.io.on('connection', (socket: Socket) => {
       console.log('New socket connection:', socket.id);
+      
+      // Extract clientId from connection handshake if available
+      const clientId = socket.handshake.query.clientId as string || socket.id;
 
       // Handle room joining
-      // In the USER_JOIN handler
-      socket.on(EventType.USER_JOIN, (data: { roomId: string; userId: string }) => {
+      socket.on(EventType.USER_JOIN, (data: { roomId: string; userId: string; clientId?: string }) => {
         console.log('User joining room:', data);
         const { roomId, userId } = data;
+        // Use provided clientId or fall back to socket query param
+        const userClientId = data.clientId || clientId;
         
         // Join the socket.io room
         socket.join(roomId);
         
         // Update our tracking maps
-        this.socketToUser.set(socket.id, { userId, roomId });
+        this.socketToUser.set(socket.id, { userId, clientId: userClientId, roomId });
         
         // Add user to room state
         const roomState = this.getOrCreateRoomState(roomId);
-        roomState.users.add(userId);
+        
+        // Initialize user's client IDs set if needed
+        if (!roomState.users.has(userId)) {
+          roomState.users.set(userId, new Set<string>());
+        }
+        
+        // Add this client ID to the user's set
+        roomState.users.get(userId)!.add(userClientId);
+        
+        // Convert users map to array of usernames for response
+        const usersList = Array.from(roomState.users.keys());
         
         // Broadcast to everyone including the sender for a single user case
         this.io.to(roomId).emit(EventType.USER_JOIN, {
           roomId,
-          payload: { userId },
+          payload: { userId, clientId: userClientId },
           timestamp: Date.now(),
-          userId
+          userId,
+          clientId: userClientId
         });
 
         // Send current room state to the newly joined user
@@ -93,10 +108,11 @@ export class SocketManager {
             currentTrack: roomState.currentTrack,
             queue: roomState.queue,
             chatHistory: roomState.chatHistory,
-            users: Array.from(roomState.users)
+            users: usersList
           },
           timestamp: Date.now(),
-          userId: 'server'
+          userId: 'server',
+          clientId: 'server'
         });
       });
 
@@ -104,7 +120,61 @@ export class SocketManager {
       socket.on(EventType.USER_LEAVE, () => {
         const userInfo = this.socketToUser.get(socket.id);
         if (userInfo) {
-          this.handleUserLeave(socket, userInfo.roomId, userInfo.userId);
+          this.handleUserLeave(socket, userInfo.roomId, userInfo.userId, userInfo.clientId);
+        }
+      });
+
+      // Handle username changes
+      socket.on(EventType.USERNAME_CHANGE, (message: any) => {
+        console.log('Username change request:', message);
+        const { roomId, payload } = message;
+        const { oldUsername, newUsername, clientId: userClientId } = payload;
+        
+        const roomState = this.getOrCreateRoomState(roomId);
+        
+        // Check if the old username exists
+        if (roomState.users.has(oldUsername)) {
+          // Get the set of client IDs for the old username
+          const clientIds = roomState.users.get(oldUsername)!;
+          
+          // Check if the client ID is in the set
+          if (clientIds.has(userClientId)) {
+            // Remove the client ID from the old username
+            clientIds.delete(userClientId);
+            
+            // If no more clients with this username, remove it
+            if (clientIds.size === 0) {
+              roomState.users.delete(oldUsername);
+            }
+            
+            // Add the client ID to the new username
+            if (!roomState.users.has(newUsername)) {
+              roomState.users.set(newUsername, new Set<string>());
+            }
+            roomState.users.get(newUsername)!.add(userClientId);
+            
+            // Update socket to user mapping for this socket if it exists
+            for (const [socketId, info] of this.socketToUser.entries()) {
+              if (info.userId === oldUsername && info.clientId === userClientId) {
+                this.socketToUser.set(socketId, {
+                  ...info,
+                  userId: newUsername
+                });
+              }
+            }
+            
+            // Get updated list of users
+            const usersList = Array.from(roomState.users.keys());
+            
+            // Broadcast the username change to all users in the room
+            this.io.to(roomId).emit(EventType.USERNAME_CHANGE, {
+              roomId,
+              payload: { oldUsername, newUsername, clientId: userClientId, users: usersList },
+              timestamp: Date.now(),
+              userId: newUsername,
+              clientId: userClientId
+            });
+          }
         }
       });
 
@@ -184,6 +254,9 @@ export class SocketManager {
           };
         }
         
+        // Convert users map to array of usernames for response
+        const usersList = Array.from(roomState.users.keys());
+        
         // Send current state with chat history
         socket.emit(EventType.SYNC_RESPONSE, {
           roomId,
@@ -191,10 +264,11 @@ export class SocketManager {
             currentTrack,
             queue: roomState.queue,
             chatHistory: roomState.chatHistory,
-            users: Array.from(roomState.users)
+            users: usersList
           },
           timestamp: Date.now(),
-          userId: 'server'
+          userId: 'server',
+          clientId: 'server'
         });
       });
 
@@ -205,7 +279,7 @@ export class SocketManager {
         // Handle user leaving the room
         const userInfo = this.socketToUser.get(socket.id);
         if (userInfo) {
-          this.handleUserLeave(socket, userInfo.roomId, userInfo.userId);
+          this.handleUserLeave(socket, userInfo.roomId, userInfo.userId, userInfo.clientId);
           // Clean up our mapping
           this.socketToUser.delete(socket.id);
         }
@@ -214,8 +288,8 @@ export class SocketManager {
   }
 
   // Helper method to handle a user leaving a room
-  private handleUserLeave(socket: Socket, roomId: string, userId: string) {
-    console.log(`User ${userId} leaving room ${roomId}`);
+  private handleUserLeave(socket: Socket, roomId: string, userId: string, clientId: string) {
+    console.log(`User ${userId} (client ${clientId}) leaving room ${roomId}`);
     
     // Leave the socket.io room
     socket.leave(roomId);
@@ -223,15 +297,25 @@ export class SocketManager {
     // Update room state
     const roomState = this.roomStates.get(roomId);
     if (roomState) {
-      roomState.users.delete(userId);
-      
-      // Broadcast to everyone in the room
-      this.io.to(roomId).emit(EventType.USER_LEAVE, {
-        roomId,
-        payload: { userId },
-        timestamp: Date.now(),
-        userId
-      });
+      // Remove this specific client for this user
+      if (roomState.users.has(userId)) {
+        const clientIds = roomState.users.get(userId)!;
+        clientIds.delete(clientId);
+        
+        // If this was the last client for this user, remove the user entirely
+        if (clientIds.size === 0) {
+          roomState.users.delete(userId);
+          
+          // Broadcast the user leave event
+          this.io.to(roomId).emit(EventType.USER_LEAVE, {
+            roomId,
+            payload: { userId, clientId },
+            timestamp: Date.now(),
+            userId,
+            clientId
+          });
+        }
+      }
       
       // Clean up empty rooms after some time to avoid losing history immediately
       if (roomState.users.size === 0) {
@@ -255,7 +339,7 @@ export class SocketManager {
     const roomState = { 
       queue: [],
       chatHistory: [],
-      users: new Set<string>()
+      users: new Map<string, Set<string>>()
     };
     this.roomStates.set(roomId, roomState);
     return roomState;
@@ -274,7 +358,7 @@ export class SocketManager {
   // Get users in a specific room
   public getRoomUsers(roomId: string): string[] {
     const roomState = this.roomStates.get(roomId);
-    return roomState ? Array.from(roomState.users) : [];
+    return roomState ? Array.from(roomState.users.keys()) : [];
   }
 
   // Delete a room

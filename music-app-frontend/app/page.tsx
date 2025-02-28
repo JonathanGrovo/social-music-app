@@ -3,13 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from '../components/ThemeToggle';
+import { generateUsername } from '../utils/username';
 
 export default function Home() {
   const [roomName, setRoomName] = useState('');
   const [userName, setUserName] = useState('');
   const [error, setError] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const router = useRouter();
+
+  // Set initial username on component mount
+  useEffect(() => {
+    // Check if there's a stored username
+    const storedUsername = localStorage.getItem('userId');
+    if (storedUsername) {
+      setUserName(storedUsername);
+    } else {
+      // Generate and set a random username
+      const newUsername = generateUsername();
+      setUserName(newUsername);
+    }
+  }, []);
 
   const createRoom = async () => {
     if (!roomName.trim()) {
@@ -23,6 +38,16 @@ export default function Home() {
     }
 
     try {
+      setIsCreatingRoom(true);
+      
+      // Store the username
+      localStorage.setItem('userId', userName);
+      
+      // Create a unique client ID
+      const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      localStorage.setItem('clientId', clientId);
+      
+      // Create room on the server
       const response = await fetch('http://localhost:3000/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,13 +57,17 @@ export default function Home() {
       const data = await response.json();
       
       if (response.ok) {
-        localStorage.setItem('userId', userName);
-        router.push(`/room/${data.room.id}`);
+        console.log(`Room created: ${data.room.id}`);
+        // Redirect to the room-content page
+        window.location.href = `/room-content/${data.room.id}`;
       } else {
         setError(data.error?.message || 'Failed to create room');
+        setIsCreatingRoom(false);
       }
     } catch (err) {
+      console.error('Error creating room:', err);
       setError('Network error, please try again');
+      setIsCreatingRoom(false);
     }
   };
 
@@ -53,22 +82,29 @@ export default function Home() {
       return;
     }
 
+    // Store the username
     localStorage.setItem('userId', userName);
-    router.push(`/room/${joinRoomId}`);
+    
+    // Create a unique client ID
+    const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem('clientId', clientId);
+    
+    // Redirect directly to the room-content page
+    window.location.href = `/room-content/${joinRoomId}`;
   };
 
-  // Add theme initialization
-  useEffect(() => {
-    // Check for saved theme preference
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
+  // If creating a room, show loading screen
+  if (isCreatingRoom) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card p-8 rounded-lg shadow-md max-w-md w-full text-center">
+          <h1 className="text-xl font-semibold text-foreground mb-4">Creating Room...</h1>
+          <div className="animate-pulse h-2 bg-primary rounded w-full max-w-xs mx-auto"></div>
+          <p className="text-muted-foreground mt-4">This will just take a moment</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
