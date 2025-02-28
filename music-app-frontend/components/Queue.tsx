@@ -73,8 +73,8 @@ export default function Queue({ queue, onUpdateQueue }: QueueProps) {
   };
 
   // Filter to only show YouTube videos in the queue
-  const youtubeQueue = queue.filter(item => item.source === 'youtube');
-
+  const youtubeQueue = (queue || []).filter(item => item.source === 'youtube');
+  
   return (
     <div className="bg-card rounded-lg shadow-md p-4 border border-border">
       <h2 className="text-lg font-semibold mb-4 text-foreground">YouTube Queue</h2>

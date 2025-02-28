@@ -37,13 +37,13 @@ function testDirectConnection() {
 testDirectConnection();
 
 export function useSocket(roomId: string, userId: string, clientId: string) {
-  
-    // Add this at the beginning of your useSocket hook
-  useEffect(() => {
-    console.warn(`SOCKET DEBUG: Browser URL: ${window.location.origin}, Socket URL: ${SOCKET_URL}`);
-    console.warn(`SOCKET DEBUG: Using roomId=${roomId}, userId=${userId}, clientId=${clientId}`);
+  // Add near the top of the hook
+  const log = useCallback((message: string, data?: any) => {
+    console.log(`[Socket Debug] ${message}`, data || '');
   }, []);
   
+  // Basic input validation - return dummy implementation if missing input
+  const hasRequiredValues = Boolean(roomId && userId && clientId);
   
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -71,14 +71,21 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
   
   // Track initialization to prevent duplicate connections
   const isInitializedRef = useRef(false);
-  
-  // Debug logging
-  const log = useCallback((message: string) => {
-    console.log(`[Socket] ${message}`);
+
+  // Add this with your other refs
+  const isUnmountingRef = useRef(false);
+
+  // Track unmounting to prevent unnecessary disconnections
+  useEffect(() => {
+    return () => {
+      isUnmountingRef.current = true;
+    };
   }, []);
   
   // Update refs when props change
   useEffect(() => {
+    if (!hasRequiredValues) return;
+    
     const userIdChanged = userIdRef.current !== userId;
     const clientIdChanged = clientIdRef.current !== clientId;
     const roomIdChanged = roomIdRef.current !== roomId;
@@ -110,9 +117,10 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
         log('Disconnecting existing socket due to parameter changes');
         socketRef.current.disconnect();
         socketRef.current = null;
+        setSocket(null);
       }
     }
-  }, [userId, clientId, roomId, log]);
+  }, [userId, clientId, roomId, log, hasRequiredValues]);
   
   // Apply batched state updates
   const applyPendingUpdates = useCallback(() => {
@@ -124,35 +132,36 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       pendingStateUpdates.current = null;
     }
   }, []);
-  
-  // Queue a state update
-  const queueStateUpdate = useCallback((update: Partial<RoomState>) => {
-    // If we have no pending updates, create a new object
-    if (!pendingStateUpdates.current) {
-      pendingStateUpdates.current = { ...update };
-    } else {
-      // Merge with existing pending updates
-      pendingStateUpdates.current = {
-        ...pendingStateUpdates.current,
-        ...update,
-        // Special handling for arrays to ensure they're properly merged
-        users: update.users || pendingStateUpdates.current.users,
-        queue: update.queue || pendingStateUpdates.current.queue,
-        chatHistory: update.chatHistory || pendingStateUpdates.current.chatHistory
-      };
+
+  // Add near other callback methods
+  const requestFullSync = useCallback(() => {
+    if (socketRef.current && socketRef.current.connected) {
+      log('Requesting full room sync');
+      socketRef.current.emit(EventType.SYNC_REQUEST, {
+        roomId: roomIdRef.current,
+        userId: userIdRef.current,
+        clientId: clientIdRef.current,
+        timestamp: Date.now(),
+        payload: {}
+      });
     }
-    
-    // Clear existing timeout if any
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-    }
-    
-    // Set timeout to apply updates
-    updateTimeoutRef.current = setTimeout(() => {
-      applyPendingUpdates();
-      updateTimeoutRef.current = null;
-    }, 50); // Small delay to batch updates
-  }, [applyPendingUpdates]);
+  }, [log]);
+
+  // Add this effect near other useEffects
+  useEffect(() => {
+    const syncInterval = setInterval(requestFullSync, 30000); // Sync every 30 seconds
+    return () => clearInterval(syncInterval);
+  }, [requestFullSync]);
+
+  const updateRoomState = useCallback((updates: Partial<RoomState>) => {
+  setRoomState(prevState => ({
+    ...prevState,
+    queue: updates.queue ?? prevState.queue,
+    chatHistory: updates.chatHistory ?? prevState.chatHistory,
+    users: updates.users ?? prevState.users,
+    currentTrack: updates.currentTrack ?? prevState.currentTrack
+  }));
+}, []);
   
   // Build a combined list of usernames from both tracking methods
   const getUserList = useCallback(() => {
@@ -175,7 +184,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
   const sendJoinRoom = useCallback((socket: Socket) => {
     if (!socket.connected) {
       log('Cannot join room: socket not connected');
-      return;
+      return false;
     }
     
     log(`Joining room ${roomIdRef.current} as ${userIdRef.current} (${clientIdRef.current})`);
@@ -196,7 +205,9 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       timestamp: Date.now(),
       payload: {}
     });
-  }, []);
+    
+    return true;
+  }, [log]);
 
   // Setup socket handlers
   const setupSocketHandlers = useCallback((socketIo: Socket) => {
@@ -204,10 +215,8 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     
     socketIo.on('connect', () => {
       log(`Connected to WebSocket server (${socketIo.id})`);
+      console.warn(`SOCKET DEBUG: Successfully connected to server with ID ${socketIo.id}`);
       setConnected(true);
-      
-      // Add debug alert
-      console.warn(`SOCKET DEBUG: Connected! Attempting to join room ${roomIdRef.current} as ${userIdRef.current}`);
       
       // Join room with both userId and clientId
       log(`Joining room ${roomIdRef.current} as ${userIdRef.current} (${clientIdRef.current})`);
@@ -228,13 +237,41 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       });
     });
 
-    socketIo.on('disconnect', () => {
-      log('Disconnected from WebSocket server');
+    socketIo.on('disconnect', (reason) => {
+      log(`Disconnected from WebSocket server. Reason: ${reason}`);
+      console.warn(`SOCKET DEBUG: Disconnected from server. Reason: ${reason}`);
       setConnected(false);
+    });
+
+    socketIo.on('reconnect', (attemptNumber) => {
+      console.warn(`SOCKET DEBUG: Reconnected to server after ${attemptNumber} attempts`);
+      setConnected(true);
+      
+      // Re-join room after reconnection
+      if (roomIdRef.current && userIdRef.current) {
+        socketIo.emit(EventType.USER_JOIN, { 
+          roomId: roomIdRef.current, 
+          userId: userIdRef.current, 
+          clientId: clientIdRef.current 
+        });
+      }
+    });
+
+    socketIo.on('reconnect_attempt', (attemptNumber) => {
+      console.warn(`SOCKET DEBUG: Attempting to reconnect: attempt #${attemptNumber}`);
+    });
+
+    socketIo.on('reconnect_error', (error) => {
+      console.warn(`SOCKET DEBUG: Reconnection error: ${error}`);
+    });
+
+    socketIo.on('reconnect_failed', () => {
+      console.warn(`SOCKET DEBUG: Failed to reconnect after maximum attempts`);
     });
 
     socketIo.on('connect_error', (error) => {
       log(`Connection error: ${error.message}`);
+      setConnected(false);
     });
 
     // Add near your other event handlers
@@ -256,15 +293,12 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
         // Update user info map with all users
         data.payload.users.forEach((userEntry: any) => {
           if (typeof userEntry === 'object' && userEntry.clientId && userEntry.username) {
-            // Handle object format (has clientId)
             userInfoMap.current.set(userEntry.clientId, {
               username: userEntry.username,
               clientId: userEntry.clientId
             });
             usernameSet.current.add(userEntry.username);
           } else if (typeof userEntry === 'string') {
-            // Handle string format (legacy) - add to username set
-            log(`Adding legacy user format: ${userEntry}`);
             usernameSet.current.add(userEntry);
           }
         });
@@ -272,9 +306,8 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       
       // Get the complete user list
       const userList = getUserList();
-      log(`User list after sync: ${userList.join(', ')}`);
       
-      // Update chat history to map to current usernames
+      // Ensure chat history is preserved and mapped to current usernames
       let updatedChatHistory = data.payload.chatHistory || [];
       updatedChatHistory = updatedChatHistory.map((msg: ChatMessage) => {
         // If message has clientId, look up the current username for that clientId
@@ -309,14 +342,23 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
         usernameSet.current.add(data.userId);
       }
       
-      // Only update chat history, don't re-render user list
-      queueStateUpdate({
-        chatHistory: [...roomState.chatHistory, {
-          userId: data.userId,
-          content: data.payload.content,
-          timestamp: data.timestamp,
-          clientId: data.clientId // Store clientId with the message
-        }]
+      // Preserve the existing chat history and add the new message
+      setRoomState(prevState => {
+        // Create a new array to trigger re-render
+        const updatedChatHistory = [
+          ...(prevState.chatHistory || []), 
+          {
+            userId: data.userId,
+            content: data.payload.content,
+            timestamp: data.timestamp,
+            clientId: data.clientId
+          }
+        ];
+        
+        return {
+          ...prevState,
+          chatHistory: updatedChatHistory
+        };
       });
     });
 
@@ -325,7 +367,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       log(`Received queue update with ${data.payload.queue?.length || 0} items`);
       
       // Only update queue, avoid re-rendering everything
-      queueStateUpdate({
+      updateRoomState({
         queue: data.payload.queue || []
       });
     });
@@ -336,7 +378,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       
       if (data.payload.trackId) {
         // Only update the current track
-        queueStateUpdate({
+        updateRoomState({
           currentTrack: {
             id: data.payload.trackId,
             source: data.payload.source || 'youtube',
@@ -366,7 +408,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       const userList = getUserList();
       
       // Only update users
-      queueStateUpdate({
+      updateRoomState({
         users: userList
       });
     });
@@ -393,72 +435,69 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       const userList = getUserList();
       
       // Only update users
-      queueStateUpdate({
+      updateRoomState({
         users: userList
       });
     });
     
-    // Handle username changes
     socketIo.on(EventType.USERNAME_CHANGE, (data) => {
-      log(`Username change: ${data.payload.oldUsername} -> ${data.payload.newUsername} (${data.payload.clientId})`);
+      log(`Username change received: ${data.payload.oldUsername} -> ${data.payload.newUsername}`);
       
-      // Update the user info map
+      // Immediately update chat history locally
+      setRoomState(prevState => {
+        // Create a new chat history with updated usernames
+        const updatedChatHistory = prevState.chatHistory.map(msg => {
+          // If the message was from the old username's client ID, update to new username
+          if (msg.clientId === data.payload.clientId) {
+            return {
+              ...msg,
+              userId: data.payload.newUsername
+            };
+          }
+          return msg;
+        });
+    
+        // Also update the users list
+        const updatedUsers = prevState.users.filter(user => 
+          user !== data.payload.oldUsername
+        );
+        updatedUsers.push(data.payload.newUsername);
+    
+        return {
+          ...prevState,
+          chatHistory: updatedChatHistory,
+          users: updatedUsers
+        };
+      });
+    
+      // Update user tracking maps
       if (data.payload.clientId) {
         userInfoMap.current.set(data.payload.clientId, {
           username: data.payload.newUsername,
           clientId: data.payload.clientId
         });
         
-        // Add new username to set
+        // Remove old username, add new username
+        usernameSet.current.delete(data.payload.oldUsername);
         usernameSet.current.add(data.payload.newUsername);
-        
-        // Check if old username is still in use before removing from set
-        const oldUsername = data.payload.oldUsername;
-        const hasOtherWithOldUsername = Array.from(userInfoMap.current.values())
-          .some(info => info.username === oldUsername && info.clientId !== data.payload.clientId);
-          
-        if (!hasOtherWithOldUsername) {
-          usernameSet.current.delete(oldUsername);
-        }
       }
-      
-      // Get complete user list
-      const userList = getUserList();
-      
-      // Update chat history to reflect the new username
-      const updatedChatHistory = roomState.chatHistory.map(msg => {
-        if (msg.clientId === data.payload.clientId) {
-          return {
-            ...msg,
-            userId: data.payload.newUsername
-          };
-        }
-        return msg;
-      });
-      
-      // Update both parts but minimize re-renders
-      queueStateUpdate({
-        users: userList,
-        chatHistory: updatedChatHistory
-      });
     });
-  }, [getUserList, queueStateUpdate, roomState.chatHistory, sendJoinRoom]);
+    
+    return socketIo;
+  }, [getUserList, updateRoomState, roomState.chatHistory, log]);
 
   // Initialize or reinitialize socket connection
   useEffect(() => {
-    // Skip if already initialized or missing required data
+    // Skip initialization if any required values are missing
+    if (!hasRequiredValues) {
+      return;
+    }
+    
+    // Skip if already initialized
     if (isInitializedRef.current) {
       return;
     }
     
-    // ADD THIS CHECK - Skip initialization if any required value is empty
-    if (!roomIdRef.current || !userIdRef.current || !clientIdRef.current) {
-      console.warn('SOCKET DEBUG: Skipping initialization - missing required values');
-      return;
-    } else {
-      console.warn('SOCKET DEBUG: ALL VALUES PRESENT, PROCEEDING WITH CONNECTION');
-    }
-  
     console.warn(`SOCKET DEBUG: Initializing with valid data: roomId=${roomIdRef.current}, userId=${userIdRef.current}, clientId=${clientIdRef.current}`);
     
     // Add initial user info to map
@@ -470,88 +509,55 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     // Add to username set
     usernameSet.current.add(userIdRef.current);
 
-    // Add this before creating the socket instance
-    console.warn(`SOCKET DEBUG: About to initialize. roomId=${roomIdRef.current}, userId=${userIdRef.current}, clientId=${clientIdRef.current}`);
-    console.warn(`SOCKET DEBUG: Browser URL: ${window.location.origin}, Socket URL: ${SOCKET_URL}`);
+    // Create socket with explicit options
     console.warn(`SOCKET DEBUG: Creating socket with URL ${SOCKET_URL}`);
     const socketIo = io(SOCKET_URL, {
-      transports: ['polling', 'websocket'], // Try polling first, then websocket as fallback
+      transports: ['websocket'], // Use websocket only for more stability
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 500,
-      timeout: 30000, // Increase timeout further
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000,
       query: {
         clientId: clientIdRef.current
       },
-      forceNew: true // Force a new connection
+      forceNew: false // Don't create a new connection each time
     });
     
-    // Log the socket state
-    console.warn(`SOCKET DEBUG: Socket created, id=${socketIo.id}, connected=${socketIo.connected}`);
-    
-    // Force connect if not connecting automatically
-    if (!socketIo.connected) {
-      console.warn('SOCKET DEBUG: Socket not connected, forcing connect');
-      try {
-        // Check the socket's readiness
-        console.warn(`SOCKET DEBUG: Socket status - connected: ${socketIo.connected}, connecting: ${socketIo.connecting}, id: ${socketIo.id}`);
-        
-        // Try to force connect
-        socketIo.connect();
-        
-        // Add a 100ms delay and check status again
-        setTimeout(() => {
-          console.warn(`SOCKET DEBUG: After connect() - connected: ${socketIo.connected}, connecting: ${socketIo.connecting}, id: ${socketIo.id}`);
-          
-          // If still not connected, try a more aggressive approach
-          if (!socketIo.connected && !socketIo.connecting) {
-            console.warn('SOCKET DEBUG: Still not connecting, trying alternative connection approach');
-            
-            // Try to disconnect and reconnect
-            socketIo.disconnect();
-            setTimeout(() => {
-              socketIo.connect();
-              console.warn('SOCKET DEBUG: Forced reconnection attempt');
-            }, 100);
-          }
-        }, 100);
-      } catch (error) {
-        console.error('SOCKET DEBUG: Error forcing connection:', error);
-      }
-    }
-    
-    // Setup event handlers
-    setupSocketHandlers(socketIo);
+    // Set up event handlers before connecting to ensure we catch all events
+    const configuredSocket = setupSocketHandlers(socketIo);
     
     // Store references
-    socketRef.current = socketIo;
-    setSocket(socketIo);
+    socketRef.current = configuredSocket;
+    setSocket(configuredSocket);
     isInitializedRef.current = true;
     
     // If already connected (rare but possible), send join immediately
-    if (socketIo.connected) {
-      sendJoinRoom(socketIo);
+    if (configuredSocket.connected) {
+      sendJoinRoom(configuredSocket);
     }
     
     // Add a fallback for single user scenarios - if no sync response received quickly
     const fallbackTimer = setTimeout(() => {
-      if (roomState.users.length <= 1 && socketIo.connected) {
+      if (roomState.users.length <= 1 && socketRef.current && socketRef.current.connected) {
         log('Single user detected, ensuring proper sync state');
-        socketIo.emit(EventType.SYNC_REQUEST, { 
-          roomId: roomIdRef.current,
-          userId: userIdRef.current,
-          clientId: clientIdRef.current,
-          timestamp: Date.now(),
-          payload: {}
-        });
+        sendJoinRoom(socketRef.current);
       }
     }, 2000);
+    
+    // Track connection status with a timeout
+    const connectTimeout = setTimeout(() => {
+      if (socketRef.current && !socketRef.current.connected) {
+        log('Connection timeout - trying to force reconnect');
+        socketRef.current.connect();
+      }
+    }, 5000);
 
     // Cleanup function
     return () => {
       log('Cleaning up socket connection');
       clearTimeout(fallbackTimer);
+      clearTimeout(connectTimeout);
       
       // Clear any pending updates
       if (updateTimeoutRef.current) {
@@ -559,44 +565,55 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
         updateTimeoutRef.current = null;
       }
       
-      // Only disconnect if explicitly cleaning up
-      socketIo.disconnect();
-      isInitializedRef.current = false;
+      // Only perform full disconnect if component is unmounting
+      if (isUnmountingRef.current) {
+        log('Component unmounting - disconnecting socket');
+        if (socketRef.current) {
+          // Remove all listeners first to prevent memory leaks
+          socketRef.current.removeAllListeners();
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+        isInitializedRef.current = false;
+      }
     };
-  // Run this effect whenever initialization status changes or refs are updated
-  }, [isInitializedRef.current, setupSocketHandlers, sendJoinRoom]);
+  }, [hasRequiredValues, setupSocketHandlers, sendJoinRoom, roomState.users.length]);
 
-  // Add this new useEffect to trigger initialization when values are updated
-  useEffect(() => {
-    // Only run if we haven't initialized yet and have all required values
-    if (!isInitializedRef.current && roomId && userId && clientId) {
-      console.warn(`SOCKET DEBUG: Values now available, roomId=${roomId}, userId=${userId}, clientId=${clientId}`);
-      
-      // Update refs
-      roomIdRef.current = roomId;
-      userIdRef.current = userId;
-      clientIdRef.current = clientId;
-      
-      // Force re-render to trigger the initialization effect
-      // We use a state update to force the component to re-render
-      const forceUpdate = {};
-      setRoomState(prev => ({...prev, ...forceUpdate}));
+  // Manual reconnect helper (exposed to parent component)
+  const reconnect = useCallback((newUsername: string, newClientId: string) => {
+    log(`Reconnecting with new username: ${newUsername} (client ${newClientId})`);
+    
+    // Update refs
+    userIdRef.current = newUsername;
+    clientIdRef.current = newClientId;
+    
+    // Disconnect existing socket if any
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
-  }, [roomId, userId, clientId]);
-
-  // Check if we need to reinitialize when not initialized
-  useEffect(() => {
-    if (!isInitializedRef.current && userIdRef.current && clientIdRef.current && roomIdRef.current) {
-      log('Not initialized but have all required data, triggering initialization');
-      // Force re-render to trigger the initialization effect
-      setConnected(false);
+    
+    // Reset initialization flag to force reconnection
+    isInitializedRef.current = false;
+    
+    // Force re-render to trigger the initialization effect
+    setConnected(false);
+  }, [log]);
+  
+  // Manual disconnect helper
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      log('Manually disconnecting socket');
+      socketRef.current.disconnect();
+      isInitializedRef.current = false;
     }
-  }, [userId, clientId, roomId, isInitializedRef.current, log]);
-
+  }, [log]);
+  
+  // Helper for sending chat messages
   const sendChatMessage = useCallback((content: string) => {
-    if (socket && connected) {
+    if (socketRef.current && socketRef.current.connected) {
       log(`Sending chat message: ${content.substring(0, 20)}...`);
-      socket.emit(EventType.CHAT_MESSAGE, {
+      socketRef.current.emit(EventType.CHAT_MESSAGE, {
         roomId: roomIdRef.current,
         userId: userIdRef.current,
         clientId: clientIdRef.current,
@@ -606,12 +623,13 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     } else {
       log('Cannot send chat message: not connected');
     }
-  }, [socket, connected, log]);
+  }, [log]);
 
+  // Helper for updating playback state
   const updatePlayback = useCallback((currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud' = 'youtube') => {
-    if (socket && connected) {
+    if (socketRef.current && socketRef.current.connected) {
       log(`Sending playback update: ${trackId} (${isPlaying ? 'playing' : 'paused'} at ${currentTime}s)`);
-      socket.emit(EventType.PLAYBACK_UPDATE, {
+      socketRef.current.emit(EventType.PLAYBACK_UPDATE, {
         roomId: roomIdRef.current,
         userId: userIdRef.current,
         clientId: clientIdRef.current,
@@ -621,12 +639,13 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     } else {
       log('Cannot update playback: not connected');
     }
-  }, [socket, connected, log]);
+  }, [log]);
 
+  // Helper for updating queue
   const updateQueue = useCallback((queue: any[]) => {
-    if (socket && connected) {
+    if (socketRef.current && socketRef.current.connected) {
       log(`Sending queue update with ${queue.length} items`);
-      socket.emit(EventType.QUEUE_UPDATE, {
+      socketRef.current.emit(EventType.QUEUE_UPDATE, {
         roomId: roomIdRef.current,
         userId: userIdRef.current,
         clientId: clientIdRef.current,
@@ -636,13 +655,13 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     } else {
       log('Cannot update queue: not connected');
     }
-  }, [socket, connected, log]);
+  }, [log]);
 
-  // Handle username change
+  // Helper for changing username
   const changeUsername = useCallback((newUsername: string) => {
-    if (socket && connected) {
+    if (socketRef.current && socketRef.current.connected) {
       log(`Sending username change: ${userIdRef.current} -> ${newUsername}`);
-      socket.emit(EventType.USERNAME_CHANGE, {
+      socketRef.current.emit(EventType.USERNAME_CHANGE, {
         roomId: roomIdRef.current,
         userId: userIdRef.current,
         clientId: clientIdRef.current,
@@ -690,69 +709,22 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       const userList = getUserList();
       
       // Update the state, but try to minimize re-renders
-      queueStateUpdate({
+      updateRoomState({
         users: userList,
         chatHistory: updatedChatHistory
       });
     } else {
       log('Cannot change username: not connected');
     }
-  }, [socket, connected, log, getUserList, queueStateUpdate, roomState.chatHistory]);
+  }, [getUserList, updateRoomState, roomState.chatHistory, log]);
 
-  // Manual disconnect function
-  const disconnect = useCallback(() => {
-    if (socketRef.current) {
-      log('Manually disconnecting socket');
-      socketRef.current.disconnect();
-      isInitializedRef.current = false;
-    }
-  }, [log]);
-
-  // Manual reconnect function with new username
-  const reconnect = useCallback((newUsername: string, newClientId: string) => {
-    log(`Reconnecting with new username: ${newUsername} (client ${newClientId})`);
-    
-    // Update refs
-    userIdRef.current = newUsername;
-    clientIdRef.current = newClientId;
-    
-    // Disconnect existing socket if any
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-    
-    // Reset initialization flag
-    isInitializedRef.current = false;
-    
-    // Force re-render to trigger the initialization effect
-    setConnected(false);
-  }, [log]);
-
-  // Add a debug function to manually join
+  // Handle manual join room attempts
   useEffect(() => {
-    if (socket && connected && socket.id) {
-      console.warn('SOCKET DEBUG: Connected socket detected, trying manual join after 1 second');
-      
-      const timer = setTimeout(() => {
-        console.warn(`SOCKET DEBUG: Manual join attempt for room ${roomIdRef.current}`);
-        socket.emit(EventType.USER_JOIN, { 
-          roomId: roomIdRef.current, 
-          userId: userIdRef.current, 
-          clientId: clientIdRef.current 
-        });
-        
-        socket.emit(EventType.SYNC_REQUEST, { 
-          roomId: roomIdRef.current,
-          userId: userIdRef.current,
-          clientId: clientIdRef.current,
-          timestamp: Date.now(),
-          payload: {}
-        });
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+    if (socket && connected && !roomState.users.includes(userId)) {
+      console.warn('SOCKET DEBUG: Connected but not joined to room, attempting to join');
+      sendJoinRoom(socket);
     }
-  }, [socket, connected]);
+  }, [connected, socket, roomState.users, userId, sendJoinRoom]);
 
   return {
     socket,

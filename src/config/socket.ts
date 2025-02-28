@@ -1,7 +1,7 @@
 // src/config/socket.ts
 import { Server as HTTPServer } from 'http';
 import { Server, Socket } from 'socket.io';
-import { EventType, SocketMessage, ChatMessage, QueueMessage, PlaybackMessage } from '../types/socket';
+import { EventType, SocketMessage, ChatMessage, QueueMessage, PlaybackMessage, UsernameChangeMessage } from '../types/socket';
 
 // Store room state for synchronization and history
 interface RoomState {
@@ -23,6 +23,7 @@ interface RoomState {
     userId: string;
     content: string;
     timestamp: number;
+    clientId?: string; // Add this line
   }>;
   // Track active users with client IDs
   users: Map<string, Set<string>>; // Map of userId -> Set of clientIds 
@@ -38,7 +39,7 @@ export class SocketManager {
   constructor(server: HTTPServer) {
     this.io = new Server(server, {
       cors: {
-        origin: process.env.CLIENT_URL || 'http://localhost:3000',
+        origin: ['http://localhost:3000', 'http://localhost:3001'],
         methods: ['GET', 'POST']
       }
     });
@@ -124,71 +125,68 @@ export class SocketManager {
         }
       });
 
-      // Handle username changes
-      socket.on(EventType.USERNAME_CHANGE, (message: any) => {
-        console.log('Username change request:', message);
-        const { roomId, payload } = message;
-        const { oldUsername, newUsername, clientId: userClientId } = payload;
+    // In the USERNAME_CHANGE event handler (around line 250-300)
+    socket.on(EventType.USERNAME_CHANGE, (message: UsernameChangeMessage) => {
+      console.log('Username change request:', message);
+      const { roomId, payload } = message;
+      const { oldUsername, newUsername, clientId: userClientId } = payload;
+      
+      const roomState = this.getOrCreateRoomState(roomId);
+      
+      // Check if the old username exists
+      if (roomState.users.has(oldUsername)) {
+        // Get the set of client IDs for the old username
+        const clientIds = roomState.users.get(oldUsername)!;
         
-        const roomState = this.getOrCreateRoomState(roomId);
-        
-        // Check if the old username exists
-        if (roomState.users.has(oldUsername)) {
-          // Get the set of client IDs for the old username
-          const clientIds = roomState.users.get(oldUsername)!;
+        // Check if the client ID is in the set
+        if (clientIds.has(userClientId)) {
+          // Remove the client ID from the old username
+          clientIds.delete(userClientId);
           
-          // Check if the client ID is in the set
-          if (clientIds.has(userClientId)) {
-            // Remove the client ID from the old username
-            clientIds.delete(userClientId);
-            
-            // If no more clients with this username, remove it
-            if (clientIds.size === 0) {
-              roomState.users.delete(oldUsername);
-            }
-            
-            // Add the client ID to the new username
-            if (!roomState.users.has(newUsername)) {
-              roomState.users.set(newUsername, new Set<string>());
-            }
-            roomState.users.get(newUsername)!.add(userClientId);
-            
-            // Update socket to user mapping for this socket if it exists
-            for (const [socketId, info] of this.socketToUser.entries()) {
-              if (info.userId === oldUsername && info.clientId === userClientId) {
-                this.socketToUser.set(socketId, {
-                  ...info,
-                  userId: newUsername
-                });
-              }
-            }
-            
-            // Get updated list of users
-            const usersList = Array.from(roomState.users.keys());
-            
-            // Broadcast the username change to all users in the room
-            this.io.to(roomId).emit(EventType.USERNAME_CHANGE, {
-              roomId,
-              payload: { oldUsername, newUsername, clientId: userClientId, users: usersList },
-              timestamp: Date.now(),
-              userId: newUsername,
-              clientId: userClientId
-            });
+          // If no more clients with this username, remove it
+          if (clientIds.size === 0) {
+            roomState.users.delete(oldUsername);
           }
+          
+          // Add the client ID to the new username
+          if (!roomState.users.has(newUsername)) {
+            roomState.users.set(newUsername, new Set<string>());
+          }
+          roomState.users.get(newUsername)!.add(userClientId);
+          
+          // Get updated list of users
+          const usersList = Array.from(roomState.users.keys());
+          
+          // Broadcast the username change to all users in the room
+          this.io.to(roomId).emit(EventType.USERNAME_CHANGE, {
+            roomId,
+            payload: { 
+              oldUsername, 
+              newUsername, 
+              clientId: userClientId, 
+              users: usersList 
+            },
+            timestamp: Date.now(),
+            userId: newUsername,
+            clientId: userClientId
+          });
         }
-      });
+      }
+    });
 
-      // Handle chat messages
+        // Handle chat messages
+        // Handle chat messages
       socket.on(EventType.CHAT_MESSAGE, (message: ChatMessage) => {
         console.log('Received chat message:', message);
-        const { roomId, userId, payload, timestamp } = message;
+        const { roomId, userId, payload, timestamp, clientId } = message;
         
         // Add to persistent chat history
         const roomState = this.getOrCreateRoomState(roomId);
         roomState.chatHistory.push({
           userId,
           content: payload.content,
-          timestamp
+          timestamp,
+          clientId: clientId // Use the destructured clientId
         });
         
         // Limit chat history to prevent memory issues (last 100 messages)
@@ -196,8 +194,14 @@ export class SocketManager {
           roomState.chatHistory.shift();
         }
         
-        // Broadcast to all users in the room
-        this.io.to(roomId).emit(EventType.CHAT_MESSAGE, message);
+        // Broadcast to all users in the room with full message details
+        this.io.to(roomId).emit(EventType.CHAT_MESSAGE, {
+          roomId,
+          userId,
+          payload: { content: payload.content },
+          timestamp,
+          clientId // Use the destructured clientId
+        } as ChatMessage); // Add type assertion
       });
 
       // Handle playback updates

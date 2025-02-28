@@ -53,8 +53,8 @@ export default function PlayerControls({
   const [autoplayAttempted, setAutoplayAttempted] = useState(false);
   
   // Only play YouTube videos
-  const youtubeQueue = queue.filter(item => item.source === 'youtube');
-  
+  const youtubeQueue = (queue || []).filter(item => item.source === 'youtube');
+    
   // Debug logging function
   const logDebug = (message: string) => {
     console.log(message);
