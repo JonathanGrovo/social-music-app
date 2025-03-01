@@ -3,18 +3,31 @@
 import { useState, useRef, useEffect } from 'react';
 import UsernameEditor from './UsernameEditor';
 import { generateUsername } from '../utils/username';
+import { UserInfo } from '../types';
 
 interface RoomInfoProps {
   roomId: string;
-  users: string[];
+  users: UserInfo[];
   currentUser: string;
+  currentClientId: string;
   onUsernameChange: (newUsername: string) => void;
 }
 
-export default function RoomInfo({ roomId, users, currentUser, onUsernameChange }: RoomInfoProps) {
+export default function RoomInfo({ 
+  roomId, 
+  users, 
+  currentUser, 
+  currentClientId,
+  onUsernameChange 
+}: RoomInfoProps) {
   const [copied, setCopied] = useState(false);
   const userListRef = useRef<HTMLUListElement>(null);
-  const prevUsersRef = useRef<string[]>([]);
+  
+  // For debugging
+  useEffect(() => {
+    console.log('RoomInfo rendering with users:', users);
+    console.log('Current user info:', { currentUser, currentClientId });
+  }, [users, currentUser, currentClientId]);
   
   // Generate room URL
   const roomUrl = typeof window !== 'undefined' 
@@ -42,11 +55,6 @@ export default function RoomInfo({ roomId, users, currentUser, onUsernameChange 
     onUsernameChange(newUsername);
     return false;
   };
-  
-  // Setup a hook to store the previous list of users
-  useEffect(() => {
-    prevUsersRef.current = users;
-  }, [users]);
 
   return (
     <div className="bg-card rounded-lg p-4 shadow-md border border-border">
@@ -89,14 +97,30 @@ export default function RoomInfo({ roomId, users, currentUser, onUsernameChange 
       
       <div>
         <p className="text-sm text-muted-foreground mb-2">Users in Room ({users.length}):</p>
-        <ul ref={userListRef} className="space-y-1 max-h-[200px] overflow-y-auto pr-2">
-          {users.map((user, index) => (
-            <li key={user} className="flex items-center text-foreground py-1">
-              <span className="h-2 w-2 rounded-full bg-secondary mr-2 flex-shrink-0"></span>
-              <span className="truncate">{user === currentUser ? `${user} (You)` : user}</span>
-            </li>
-          ))}
-        </ul>
+          <ul ref={userListRef} className="space-y-1 max-h-[200px] overflow-y-auto pr-2">
+            {[...users]
+              .sort((a, b) => {
+                // Current user goes to the top
+                if (a.clientId === currentClientId) return -1;
+                if (b.clientId === currentClientId) return 1;
+                // Otherwise maintain the existing order
+                return 0;
+              })
+              .map((user) => (
+                <li 
+                  key={`user-${user.clientId}`} 
+                  className="flex items-center text-foreground py-1"
+                >
+                  <span className="h-2 w-2 rounded-full bg-secondary mr-2 flex-shrink-0"></span>
+                  <span className="truncate">
+                    {user.clientId === currentClientId 
+                      ? `${user.userId} (You)` 
+                      : user.userId
+                    }
+                  </span>
+                </li>
+              ))}
+          </ul>
       </div>
     </div>
   );

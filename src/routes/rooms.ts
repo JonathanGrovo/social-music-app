@@ -71,7 +71,7 @@ router.get('/:roomId', (req, res) => {
   res.status(200).json({
     room: {
       id: roomId,
-      users: Array.from(roomState.users),
+      users: socketManager.getRoomUsers(roomId),
       userCount: roomState.users.size,
       currentTrack: roomState.currentTrack,
       queueLength: roomState.queue.length
@@ -177,9 +177,9 @@ router.get('/:roomId/users', (req, res) => {
     });
   }
   
-  const roomState = socketManager.getRoomState(roomId);
+  const users = socketManager.getRoomUsers(roomId);
   
-  if (!roomState) {
+  if (!users) {
     return res.status(404).json({
       error: {
         message: 'Room not found',
@@ -191,7 +191,7 @@ router.get('/:roomId/users', (req, res) => {
   // Return user list
   res.status(200).json({
     roomId,
-    users: Array.from(roomState.users)
+    users
   });
 });
 

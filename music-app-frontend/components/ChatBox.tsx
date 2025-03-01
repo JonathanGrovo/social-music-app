@@ -7,14 +7,21 @@ interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   username: string;
+  clientId: string; // Add clientId to props
 }
 
-export default function ChatBox({ messages, onSendMessage, username }: ChatBoxProps) {
+export default function ChatBox({ messages, onSendMessage, username, clientId }: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const prevMessagesLengthRef = useRef(messages.length);
+
+  // For debugging
+  useEffect(() => {
+    console.log('ChatBox rendering with messages:', messages.length);
+    console.log('Current user info:', { username, clientId });
+  }, [messages.length, username, clientId]);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -69,20 +76,20 @@ export default function ChatBox({ messages, onSendMessage, username }: ChatBoxPr
         className="overflow-y-auto flex-1 p-4"
         style={{ overflowAnchor: 'auto' }}
       >
-        {messages.map((msg, index) => (
+        {messages.map((msg) => (
           <div
-            key={`${msg.userId}-${index}-${msg.timestamp}`}
-            className={`mb-2 ${msg.userId === username ? 'text-right' : ''}`}
+            key={`${msg.clientId}-${msg.timestamp}`}
+            className={`mb-2 ${msg.clientId === clientId ? 'text-right' : ''}`}
           >
             <div
               className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
-                msg.userId === username
+                msg.clientId === clientId
                   ? 'bg-message-own text-message-own-text'
                   : 'bg-message-other text-message-other-text'
               }`}
             >
               <div className="font-semibold text-xs mb-1">
-                {msg.userId === username ? 'You' : msg.userId}
+                {msg.clientId === clientId ? 'You' : msg.userId}
               </div>
               <div>{msg.content}</div>
             </div>

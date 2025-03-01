@@ -4,7 +4,7 @@ export interface ChatMessage {
   userId: string;
   content: string;
   timestamp: number;
-  clientId?: string; // Add clientId to keep track of message sender
+  clientId: string; // Make clientId required to ensure proper tracking
 }
 
 export interface QueueItem {
@@ -16,8 +16,8 @@ export interface QueueItem {
 }
 
 export interface UserInfo {
-  username: string;
-  clientId: string;
+  userId: string;   // Username
+  clientId: string; // Unique client identifier
 }
 
 export interface RoomState {
@@ -30,7 +30,7 @@ export interface RoomState {
   };
   queue: QueueItem[];
   chatHistory: ChatMessage[];
-  users: string[]; // This will be usernames
+  users: UserInfo[]; // Array of user info objects
 }
 
 export enum EventType {

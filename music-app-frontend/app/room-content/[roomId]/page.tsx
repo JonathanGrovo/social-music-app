@@ -72,7 +72,7 @@ export default function RoomContentPage() {
     }
   }, [roomState]);
   
-  // Handle username change using the improved method
+  // Handle username change
   const handleUsernameChange = (newUsername: string) => {
     if (newUsername === username) {
       console.log("Username unchanged, ignoring");
@@ -84,7 +84,7 @@ export default function RoomContentPage() {
     // Store the new username in localStorage
     localStorage.setItem('userId', newUsername);
     
-    // Update local state
+    // Update local state immediately
     setUsername(newUsername);
     
     // Use the improved changeUsername method
@@ -160,12 +160,14 @@ export default function RoomContentPage() {
               roomId={roomId}
               users={roomState.users}
               currentUser={username}
+              currentClientId={clientId}
               onUsernameChange={handleUsernameChange}
             />
             <ChatBox
               messages={roomState.chatHistory}
               onSendMessage={sendChatMessage}
               username={username}
+              clientId={clientId}
             />
           </div>
         </div>

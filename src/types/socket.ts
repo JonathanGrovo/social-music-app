@@ -14,7 +14,7 @@ export enum EventType {
 export interface SocketMessage {
   roomId: string;
   userId: string;
-  clientId?: string; // Added client ID
+  clientId: string; // Client ID is now required
   payload: any;
   timestamp: number;
 }
@@ -52,4 +52,10 @@ export interface UsernameChangeMessage extends SocketMessage {
     newUsername: string;
     clientId: string;
   };
+}
+
+// Type for user info in room
+export interface UserInfo {
+  userId: string; // Username
+  clientId: string; // Unique client identifier
 }
