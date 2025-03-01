@@ -7,6 +7,7 @@ import ChatBox from '../../../components/ChatBox';
 import PlayerControls from '../../../components/PlayerControls';
 import Queue from '../../../components/Queue';
 import RoomInfo from '../../../components/RoomInfo';
+import { generateRandomAvatarId } from '../../../utils/avatar';
 
 export default function RoomContentPage() {
   const params = useParams();
@@ -16,6 +17,7 @@ export default function RoomContentPage() {
   // Get stored user info
   const [username, setUsername] = useState<string>('');
   const [clientId, setClientId] = useState<string>('');
+  const [avatarId, setAvatarId] = useState<string>('');
   
   // Connection states
   const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +38,13 @@ export default function RoomContentPage() {
     const storedUsername = localStorage.getItem('userId');
     const storedClientId = localStorage.getItem('clientId');
     
+    // Get avatar ID from localStorage or generate a new one
+    let storedAvatarId = localStorage.getItem('avatarId');
+    if (!storedAvatarId) {
+      storedAvatarId = generateRandomAvatarId();
+      localStorage.setItem('avatarId', storedAvatarId);
+    }
+    
     if (!storedUsername || !storedClientId) {
       console.error('Missing user info');
       setError('Missing user information. Please return to the home page.');
@@ -44,12 +53,13 @@ export default function RoomContentPage() {
     
     setUsername(storedUsername);
     setClientId(storedClientId);
+    setAvatarId(storedAvatarId);
     setIsLoading(false);
     
-    console.log(`Room content initialized: User ${storedUsername}, Client ${storedClientId}`);
+    console.log(`Room content initialized: User ${storedUsername}, Client ${storedClientId}, Avatar ${storedAvatarId}`);
   }, []);
   
-  // Initialize socket with roomId, username, and clientId
+  // Initialize socket with roomId, username, clientId, and avatarId
   const {
     socket,
     connected,
@@ -58,9 +68,10 @@ export default function RoomContentPage() {
     updatePlayback,
     updateQueue,
     changeUsername,
+    changeAvatar,
     disconnect,
     reconnect
-  } = useSocket(roomId, username, clientId);
+  } = useSocket(roomId, username, clientId, avatarId);
   
   // Update the playback state reference whenever roomState changes
   useEffect(() => {
@@ -90,6 +101,27 @@ export default function RoomContentPage() {
     // Use the improved changeUsername method
     if (changeUsername) {
       changeUsername(newUsername);
+    }
+  };
+  
+  // Handle avatar change
+  const handleAvatarChange = (newAvatarId: string) => {
+    if (newAvatarId === avatarId) {
+      console.log("Avatar unchanged, ignoring");
+      return;
+    }
+    
+    console.log(`Changing avatar from ${avatarId} to ${newAvatarId}`);
+    
+    // Store the new avatar ID in localStorage
+    localStorage.setItem('avatarId', newAvatarId);
+    
+    // Update local state immediately
+    setAvatarId(newAvatarId);
+    
+    // Use the changeAvatar method
+    if (changeAvatar) {
+      changeAvatar(newAvatarId);
     }
   };
   
@@ -161,13 +193,16 @@ export default function RoomContentPage() {
               users={roomState.users}
               currentUser={username}
               currentClientId={clientId}
+              currentAvatarId={avatarId}
               onUsernameChange={handleUsernameChange}
+              onAvatarChange={handleAvatarChange}
             />
             <ChatBox
               messages={roomState.chatHistory}
               onSendMessage={sendChatMessage}
               username={username}
               clientId={clientId}
+              users={roomState.users}
             />
           </div>
         </div>

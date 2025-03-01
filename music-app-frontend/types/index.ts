@@ -5,6 +5,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   clientId: string; // Make clientId required to ensure proper tracking
+  avatarId?: string; // Add avatar ID to messages
 }
 
 export interface QueueItem {
@@ -18,6 +19,7 @@ export interface QueueItem {
 export interface UserInfo {
   userId: string;   // Username
   clientId: string; // Unique client identifier
+  avatarId: string; // Avatar identifier
 }
 
 export interface RoomState {
@@ -41,5 +43,6 @@ export enum EventType {
   USER_LEAVE = 'USER_LEAVE',
   SYNC_REQUEST = 'SYNC_REQUEST',
   SYNC_RESPONSE = 'SYNC_RESPONSE',
-  USERNAME_CHANGE = 'USERNAME_CHANGE'
+  USERNAME_CHANGE = 'USERNAME_CHANGE',
+  AVATAR_CHANGE = 'AVATAR_CHANGE' // Add new event type
 }

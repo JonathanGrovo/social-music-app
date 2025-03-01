@@ -8,7 +8,8 @@ export enum EventType {
   USER_LEAVE = 'USER_LEAVE',
   SYNC_REQUEST = 'SYNC_REQUEST',
   SYNC_RESPONSE = 'SYNC_RESPONSE',
-  USERNAME_CHANGE = 'USERNAME_CHANGE'
+  USERNAME_CHANGE = 'USERNAME_CHANGE',
+  AVATAR_CHANGE = 'AVATAR_CHANGE'
 }
 
 export interface SocketMessage {
@@ -58,4 +59,12 @@ export interface UsernameChangeMessage extends SocketMessage {
 export interface UserInfo {
   userId: string; // Username
   clientId: string; // Unique client identifier
+}
+
+export interface AvatarChangeMessage extends SocketMessage {
+  payload: {
+    oldAvatarId: string;
+    newAvatarId: string;
+    clientId: string;
+  };
 }

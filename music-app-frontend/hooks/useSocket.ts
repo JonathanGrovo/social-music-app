@@ -11,9 +11,9 @@ function log(message: string, data?: any) {
   console.log(`[Socket] ${message}`, data || '');
 }
 
-export function useSocket(roomId: string, userId: string, clientId: string) {
+export function useSocket(roomId: string, userId: string, clientId: string, avatarId: string) {
   // Basic input validation - return dummy implementation if missing input
-  const hasRequiredValues = Boolean(roomId && userId && clientId);
+  const hasRequiredValues = Boolean(roomId && userId && clientId && avatarId);
   
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -28,6 +28,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
   const clientIdRef = useRef(clientId);
   const roomIdRef = useRef(roomId);
   const socketRef = useRef<Socket | null>(null);
+  const avatarIdRef = useRef(avatarId);
   
   // Track initialization to prevent duplicate connections
   const isInitializedRef = useRef(false);
@@ -40,6 +41,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     const userIdChanged = userIdRef.current !== userId;
     const clientIdChanged = clientIdRef.current !== clientId;
     const roomIdChanged = roomIdRef.current !== roomId;
+    const avatarIdChanged = avatarIdRef.current !== avatarId;
     
     // Update refs
     if (userIdChanged) {
@@ -55,6 +57,11 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     if (roomIdChanged) {
       log(`Updating roomIdRef from ${roomIdRef.current} to ${roomId}`);
       roomIdRef.current = roomId;
+    }
+
+    if (avatarIdChanged) {
+      log(`Updating avatarIdRef from ${avatarIdRef.current} to ${avatarId}`);
+      avatarIdRef.current = avatarId;
     }
     
     // If we already have a socket connection and the room has changed,
@@ -200,6 +207,8 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
 
     // Handle room sync
     socketIo.on(EventType.SYNC_RESPONSE, (data) => {
+      console.log('Raw SYNC_RESPONSE data:', data);
+      console.log('User data in SYNC_RESPONSE:', data.payload.users);
       log(`Received sync response with ${data.payload.queue?.length || 0} queue items and ${data.payload.users?.length || 0} users`);
       
       // Process user list from server (already in UserInfo format)
@@ -256,13 +265,19 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     socketIo.on(EventType.CHAT_MESSAGE, (data) => {
       log(`Received chat message from ${data.userId} (${data.clientId})`);
       
+      const userId = typeof data.userId === 'object' && data.userId !== null && 'userId' in data.userId 
+      ? data.userId.userId 
+      : typeof data.userId === 'string' 
+        ? data.userId 
+        : 'Unknown';
+
       // Add to chat history without losing existing messages
       setRoomState(prevState => ({
         ...prevState,
         chatHistory: [
           ...prevState.chatHistory,
           {
-            userId: data.userId,
+            userId,
             content: data.payload.content,
             timestamp: data.timestamp,
             clientId: data.clientId
@@ -300,7 +315,8 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
 
     // Handle user join
     socketIo.on(EventType.USER_JOIN, (data) => {
-      log(`User joined: ${data.userId} (${data.clientId})`);
+      
+      console.log('Raw USER_JOIN data:', data);
       
       // Add new user to the users array if not already present
       setRoomState(prevState => {
@@ -309,12 +325,16 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
           user.clientId === data.clientId
         );
         
+        // Get the avatar ID from the event payload or use a default
+        const userAvatarId = data.avatarId || 'avatar1'; // Default if not provided
+        
         if (existingUserIndex >= 0) {
           // User already exists, update their info
           const updatedUsers = [...prevState.users];
           updatedUsers[existingUserIndex] = {
             userId: data.userId,
-            clientId: data.clientId
+            clientId: data.clientId,
+            avatarId: userAvatarId // Include the avatar ID
           };
           return {
             ...prevState,
@@ -328,7 +348,8 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
               ...prevState.users,
               {
                 userId: data.userId,
-                clientId: data.clientId
+                clientId: data.clientId,
+                avatarId: userAvatarId // Include the avatar ID
               }
             ]
           };
@@ -403,6 +424,53 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
       setTimeout(() => {
         if (socketRef.current && socketRef.current.connected) {
           log('Requesting sync after username change event');
+          socketRef.current.emit(EventType.SYNC_REQUEST, {
+            roomId: roomIdRef.current,
+            userId: userIdRef.current, 
+            clientId: clientIdRef.current,
+            timestamp: Date.now(),
+            payload: {}
+          });
+        }
+      }, 300);
+    });
+
+    // Avatar change event handler
+    socketIo.on(EventType.AVATAR_CHANGE, (data) => {
+      log(`Avatar change event received: ${data.payload.clientId} -> ${data.payload.newAvatarId}`);
+      
+      // Check if this is our own avatar change to avoid duplicate updates
+      const isOwnAvatarChange = data.payload.clientId === clientIdRef.current;
+      if (isOwnAvatarChange) {
+        log(`This is our own avatar change, already updated locally`);
+      } else {
+        // This is another user's avatar change
+        log(`Updating state for another user's avatar change`);
+        
+        setRoomState(prevState => {
+          // Update the user entry in the users array
+          const updatedUsers = prevState.users.map(user => {
+            if (user.clientId === data.payload.clientId) {
+              log(`Updating user avatar in state: ${user.avatarId} -> ${data.payload.newAvatarId}`);
+              return {
+                ...user,
+                avatarId: data.payload.newAvatarId
+              };
+            }
+            return user;
+          });
+          
+          return {
+            ...prevState,
+            users: updatedUsers
+          };
+        });
+      }
+      
+      // Request a sync to ensure we have the latest state
+      setTimeout(() => {
+        if (socketRef.current && socketRef.current.connected) {
+          log('Requesting sync after avatar change event');
           socketRef.current.emit(EventType.SYNC_REQUEST, {
             roomId: roomIdRef.current,
             userId: userIdRef.current, 
@@ -649,6 +717,73 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     }
   }, []);
 
+  // Add this function after changeUsername:
+  const changeAvatar = useCallback((newAvatarId: string) => {
+    if (newAvatarId === avatarIdRef.current) {
+      log("Avatar unchanged, ignoring");
+      return;
+    }
+    
+    if (socketRef.current && socketRef.current.connected) {
+      log(`Sending avatar change: ${avatarIdRef.current} -> ${newAvatarId}`);
+      
+      // Store old avatar ID before updating
+      const oldAvatarId = avatarIdRef.current;
+      
+      // Update our ref immediately
+      avatarIdRef.current = newAvatarId;
+      
+      // Update local state immediately without waiting for server response
+      setRoomState(prevState => {
+        // Update our entry in the users array
+        const updatedUsers = prevState.users.map(user => {
+          if (user.clientId === clientIdRef.current) {
+            log(`Updating user avatar in local state: ${user.avatarId} -> ${newAvatarId}`);
+            return {
+              ...user,
+              avatarId: newAvatarId
+            };
+          }
+          return user;
+        });
+        
+        return {
+          ...prevState,
+          users: updatedUsers
+        };
+      });
+      
+      // Send the avatar change event
+      socketRef.current.emit(EventType.AVATAR_CHANGE, {
+        roomId: roomIdRef.current,
+        userId: userIdRef.current,
+        clientId: clientIdRef.current,
+        payload: { 
+          oldAvatarId, 
+          newAvatarId,
+          clientId: clientIdRef.current 
+        },
+        timestamp: Date.now()
+      });
+      
+      // Request a sync after avatar change
+      setTimeout(() => {
+        if (socketRef.current && socketRef.current.connected) {
+          log('Requesting sync after avatar change');
+          socketRef.current.emit(EventType.SYNC_REQUEST, {
+            roomId: roomIdRef.current,
+            userId: userIdRef.current,
+            clientId: clientIdRef.current,
+            timestamp: Date.now(),
+            payload: {}
+          });
+        }
+      }, 500);
+    } else {
+      log('Cannot change avatar: not connected');
+    }
+  }, []);
+
   return {
     socket,
     connected,
@@ -657,6 +792,7 @@ export function useSocket(roomId: string, userId: string, clientId: string) {
     updatePlayback,
     updateQueue,
     changeUsername,
+    changeAvatar,
     disconnect,
     reconnect
   };

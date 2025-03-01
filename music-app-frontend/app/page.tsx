@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from '../components/ThemeToggle';
 import { generateUsername } from '../utils/username';
+import { generateRandomAvatarId } from '../utils/avatar';
 
 export default function Home() {
   const [roomName, setRoomName] = useState('');
@@ -23,6 +24,13 @@ export default function Home() {
       // Generate and set a random username
       const newUsername = generateUsername();
       setUserName(newUsername);
+    }
+    
+    // Check if there's a stored avatar ID, if not generate one
+    const storedAvatarId = localStorage.getItem('avatarId');
+    if (!storedAvatarId) {
+      const newAvatarId = generateRandomAvatarId();
+      localStorage.setItem('avatarId', newAvatarId);
     }
   }, []);
 
@@ -46,6 +54,11 @@ export default function Home() {
       // Create a unique client ID
       const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       localStorage.setItem('clientId', clientId);
+      
+      // Ensure we have an avatar ID
+      if (!localStorage.getItem('avatarId')) {
+        localStorage.setItem('avatarId', generateRandomAvatarId());
+      }
       
       // Create room on the server
       const response = await fetch('http://localhost:3000/api/rooms', {
@@ -89,10 +102,17 @@ export default function Home() {
     const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     localStorage.setItem('clientId', clientId);
     
+    // Ensure we have an avatar ID
+    if (!localStorage.getItem('avatarId')) {
+      localStorage.setItem('avatarId', generateRandomAvatarId());
+    }
+    
     // Redirect directly to the room-content page
     window.location.href = `/room-content/${joinRoomId}`;
   };
 
+  // Rest of the component remains the same...
+  
   // If creating a room, show loading screen
   if (isCreatingRoom) {
     return (

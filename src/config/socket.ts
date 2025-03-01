@@ -1,7 +1,9 @@
 // src/config/socket.ts
 import { Server as HTTPServer } from 'http';
 import { Server, Socket } from 'socket.io';
-import { EventType, SocketMessage, ChatMessage, QueueMessage, PlaybackMessage, UsernameChangeMessage, UserInfo } from '../types/socket';
+import { EventType, SocketMessage, ChatMessage, QueueMessage, 
+  PlaybackMessage, UsernameChangeMessage, UserInfo, 
+  AvatarChangeMessage } from '../types/socket';
 
 // Store room state for synchronization and history
 interface RoomState {
@@ -24,9 +26,10 @@ interface RoomState {
     content: string;
     timestamp: number;
     clientId: string; // Client ID is required for chat messages
+    avatarId?: string; // Add avatarId
   }>;
   // Track active users by client ID, with username as the value
-  users: Map<string, string>; // Map of clientId -> userId (username)
+  users: Map<string, { userId: string, avatarId: string }>; // Updated to include avatarId
 }
 
 export class SocketManager {
@@ -53,7 +56,7 @@ export class SocketManager {
       this.roomStates.set(roomId, { 
         queue: [],
         chatHistory: [],
-        users: new Map<string, string>() // clientId -> userId map
+        users: new Map<string, { userId: string, avatarId: string }>() // Updated to include avatarId
       });
     }
     return this.roomStates.get(roomId)!;
@@ -67,29 +70,32 @@ export class SocketManager {
       const clientId = socket.handshake.query.clientId as string || socket.id;
 
       // Handle room joining
-      socket.on(EventType.USER_JOIN, (data: { roomId: string; userId: string; clientId?: string }) => {
-        console.log('User joining room:', data);
-        const { roomId, userId } = data;
-        // Use provided clientId or fall back to socket query param
-        const userClientId = data.clientId || clientId;
-        
-        // Join the socket.io room
-        socket.join(roomId);
-        
-        // Update our tracking maps
-        this.socketToUser.set(socket.id, { userId, clientId: userClientId, roomId });
-        
-        // Add user to room state
-        const roomState = this.getOrCreateRoomState(roomId);
-        
-        // Add this user to the users map (clientId -> userId)
-        roomState.users.set(userClientId, userId);
-        
-        // Convert users map to array of user info objects for response
-        const usersList = Array.from(roomState.users.entries()).map(([clientId, userId]) => ({
-          clientId,
-          userId
-        }));
+      socket.on(EventType.USER_JOIN, (data: { roomId: string; userId: string; clientId?: string; avatarId?: string }) => {
+      console.log('User joining room:', data);
+      const { roomId, userId } = data;
+      // Use provided clientId or fall back to socket query param
+      const userClientId = data.clientId || clientId;
+      // Use provided avatarId or default to avatar1
+      const userAvatarId = data.avatarId || 'avatar1';
+      
+      // Join the socket.io room
+      socket.join(roomId);
+      
+      // Update our tracking maps
+      this.socketToUser.set(socket.id, { userId, clientId: userClientId, roomId });
+      
+      // Add user to room state
+      const roomState = this.getOrCreateRoomState(roomId);
+      
+      // Add this user to the users map (clientId -> { userId, avatarId })
+      roomState.users.set(userClientId, { userId, avatarId: userAvatarId });
+      
+      // Convert users map to array of user info objects for response
+      const usersList = Array.from(roomState.users.entries()).map(([clientId, userInfo]) => ({
+        clientId,
+        userId: userInfo.userId,
+        avatarId: userInfo.avatarId
+      }));
         
         // Broadcast to everyone including the sender for a single user case
         this.io.to(roomId).emit(EventType.USER_JOIN, {
@@ -131,9 +137,16 @@ export class SocketManager {
         
         const roomState = this.getOrCreateRoomState(roomId);
         
-        // Update the username in the users map
+        // Update the username in the users map while preserving avatarId
         if (roomState.users.has(userClientId)) {
-          roomState.users.set(userClientId, newUsername);
+          const currentUserInfo = roomState.users.get(userClientId);
+          const avatarId = currentUserInfo ? currentUserInfo.avatarId : 'avatar1';
+          
+          // Update with new username but keep the same avatarId
+          roomState.users.set(userClientId, { 
+            userId: newUsername,
+            avatarId 
+          });
           
           // Update chat history to reflect new username
           roomState.chatHistory = roomState.chatHistory.map(msg => {
@@ -144,9 +157,10 @@ export class SocketManager {
           });
           
           // Get updated list of users
-          const usersList = Array.from(roomState.users.entries()).map(([clientId, userId]) => ({
+          const usersList = Array.from(roomState.users.entries()).map(([clientId, userInfo]) => ({
             clientId,
-            userId
+            userId: userInfo.userId,
+            avatarId: userInfo.avatarId
           }));
           
           // Broadcast the username change to all users in the room
@@ -165,18 +179,72 @@ export class SocketManager {
         }
       });
 
+      // Add after the USERNAME_CHANGE handler
+      socket.on(EventType.AVATAR_CHANGE, (message: AvatarChangeMessage) => {
+        console.log('Avatar change request:', message);
+        const { roomId, payload } = message;
+        const { oldAvatarId, newAvatarId, clientId: userClientId } = payload;
+        
+        const roomState = this.getOrCreateRoomState(roomId);
+        
+        // Update the avatar in the users map
+        if (roomState.users.has(userClientId)) {
+          const userInfo = roomState.users.get(userClientId);
+          if (userInfo) {
+            roomState.users.set(userClientId, {
+              ...userInfo,
+              avatarId: newAvatarId
+            });
+            
+            // Update chat history to reflect new avatar
+            roomState.chatHistory = roomState.chatHistory.map(msg => {
+              if (msg.clientId === userClientId) {
+                return { ...msg, avatarId: newAvatarId };
+              }
+              return msg;
+            });
+            
+            // Get updated list of users
+            const usersList = Array.from(roomState.users.entries()).map(([clientId, userInfo]) => ({
+              clientId,
+              userId: userInfo.userId,
+              avatarId: userInfo.avatarId
+            }));
+            
+            // Broadcast the avatar change to all users in the room
+            this.io.to(roomId).emit(EventType.AVATAR_CHANGE, {
+              roomId,
+              userId: roomState.users.get(userClientId)?.userId || '',
+              clientId: userClientId,
+              payload: { 
+                oldAvatarId, 
+                newAvatarId, 
+                clientId: userClientId, 
+                users: usersList 
+              },
+              timestamp: Date.now()
+            });
+          }
+        }
+      });
+
       // Handle chat messages
       socket.on(EventType.CHAT_MESSAGE, (message: ChatMessage) => {
         console.log('Received chat message:', message);
         const { roomId, userId, payload, timestamp, clientId } = message;
         
-        // Add to persistent chat history
+        // Get the user's avatar ID from room state
         const roomState = this.getOrCreateRoomState(roomId);
+        const userInfo = roomState.users.get(clientId);
+        const avatarId = userInfo ? userInfo.avatarId : 'avatar1';
+        
+        // Add to persistent chat history with avatar ID
         roomState.chatHistory.push({
           userId,
           content: payload.content,
           timestamp,
-          clientId
+          clientId,
+          avatarId
         });
         
         // Limit chat history to prevent memory issues (last 100 messages)
@@ -328,7 +396,7 @@ export class SocketManager {
     const roomState = { 
       queue: [],
       chatHistory: [],
-      users: new Map<string, string>() // clientId -> userId map
+      users: new Map<string, { userId: string, avatarId: string }>() // clientId -> userId map
     };
     this.roomStates.set(roomId, roomState);
     return roomState;
@@ -348,9 +416,10 @@ export class SocketManager {
   public getRoomUsers(roomId: string): UserInfo[] {
     const roomState = this.roomStates.get(roomId);
     return roomState ? 
-      Array.from(roomState.users.entries()).map(([clientId, userId]) => ({ 
+      Array.from(roomState.users.entries()).map(([clientId, userInfo]) => ({ 
         clientId, 
-        userId 
+        userId: userInfo.userId,
+        avatarId: userInfo.avatarId
       })) : [];
   }
 

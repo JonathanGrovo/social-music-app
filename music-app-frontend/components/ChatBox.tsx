@@ -1,27 +1,31 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { ChatMessage } from '../types';
+import { formatMessageTime } from '../utils/formatMessageTime';
+import { getAvatarPath } from '../utils/avatar';
 
 interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   username: string;
-  clientId: string; // Add clientId to props
+  clientId: string;
+  users: Array<{ userId: string; clientId: string; avatarId: string }>;
 }
 
-export default function ChatBox({ messages, onSendMessage, username, clientId }: ChatBoxProps) {
+export default function ChatBox({ 
+  messages, 
+  onSendMessage, 
+  username, 
+  clientId, 
+  users 
+}: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const prevMessagesLengthRef = useRef(messages.length);
-
-  // For debugging
-  useEffect(() => {
-    console.log('ChatBox rendering with messages:', messages.length);
-    console.log('Current user info:', { username, clientId });
-  }, [messages.length, username, clientId]);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -39,12 +43,10 @@ export default function ChatBox({ messages, onSendMessage, username, clientId }:
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    // Only auto-scroll if messages were added (not on username changes)
     if (autoScroll && messagesEndRef.current && messages.length > prevMessagesLengthRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
     
-    // Update length ref
     prevMessagesLengthRef.current = messages.length;
   }, [messages, autoScroll]);
   
@@ -54,7 +56,6 @@ export default function ChatBox({ messages, onSendMessage, username, clientId }:
     if (!container) return;
     
     const handleScroll = () => {
-      // If we're more than 100px from the bottom, disable auto-scroll
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
       if (autoScroll !== isNearBottom) {
         setAutoScroll(isNearBottom);
@@ -65,6 +66,15 @@ export default function ChatBox({ messages, onSendMessage, username, clientId }:
     return () => container.removeEventListener('scroll', handleScroll);
   }, [autoScroll]);
 
+  // Helper to get avatar for a message
+  const getMessageAvatar = (message: ChatMessage) => {
+    // Find the user that sent this message
+    const user = users.find(u => u.clientId === message.clientId);
+    
+    // Return the user's avatar if found, or use message avatar, or fallback to first avatar
+    return user?.avatarId || message.avatarId || 'avatar1';
+  };
+
   return (
     <div className="flex flex-col h-[400px] bg-card rounded-lg shadow-md overflow-hidden border border-border">
       <div className="bg-muted py-3 px-4 border-b border-border">
@@ -73,25 +83,46 @@ export default function ChatBox({ messages, onSendMessage, username, clientId }:
       
       <div 
         ref={messagesContainerRef}
-        className="overflow-y-auto flex-1 p-4"
+        className="overflow-y-auto flex-1 p-4 space-y-4"
         style={{ overflowAnchor: 'auto' }}
       >
         {messages.map((msg) => (
           <div
             key={`${msg.clientId}-${msg.timestamp}`}
-            className={`mb-2 ${msg.clientId === clientId ? 'text-right' : ''}`}
+            className="flex items-start"
           >
-            <div
-              className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
-                msg.clientId === clientId
-                  ? 'bg-message-own text-message-own-text'
-                  : 'bg-message-other text-message-other-text'
-              }`}
-            >
-              <div className="font-semibold text-xs mb-1">
-                {msg.clientId === clientId ? 'You' : msg.userId}
+            {/* Avatar */}
+            <div className="h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
+              <Image 
+                src={getAvatarPath(getMessageAvatar(msg))}
+                alt={`${msg.userId}'s avatar`}
+                width={32}
+                height={32}
+                className="object-cover w-full h-full"
+              />
+            </div>
+            
+            {/* Message content */}
+            <div className="flex-1 min-w-0">
+              <div 
+                className={`
+                  px-3 py-2 rounded-lg 
+                  ${msg.clientId === clientId 
+                    ? 'bg-message-own text-message-own-text' 
+                    : 'bg-message-other text-message-other-text'}
+                `}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold text-xs">
+                    {msg.userId}                    
+                    {msg.clientId === clientId && <span className="ml-1 text-xs opacity-50">(You)</span>}
+                  </div>
+                  <div className="text-xs opacity-60 ml-2">
+                    {formatMessageTime(msg.timestamp)}
+                  </div>
+                </div>
+                <div className="break-words">{msg.content}</div>
               </div>
-              <div>{msg.content}</div>
             </div>
           </div>
         ))}
