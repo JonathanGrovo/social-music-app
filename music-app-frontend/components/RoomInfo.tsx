@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import UsernameEditor from './UsernameEditor';
-import { generateUsername } from '../utils/username';
+
 import { UserInfo } from '../types';
 
 interface RoomInfoProps {
@@ -21,6 +21,7 @@ export default function RoomInfo({
   onUsernameChange 
 }: RoomInfoProps) {
   const [copied, setCopied] = useState(false);
+  const [editingUsernameInList, setEditingUsernameInList] = useState(false);
   const userListRef = useRef<HTMLUListElement>(null);
   
   // For debugging
@@ -41,20 +42,7 @@ export default function RoomInfo({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Handle random username button click
-  const handleRandomUsername = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Generate a new random username that's different from the current one
-    let newUsername = generateUsername();
-    while (newUsername === currentUser) {
-      newUsername = generateUsername();
-    }
-    
-    onUsernameChange(newUsername);
-    return false;
-  };
+
 
   return (
     <div className="bg-card rounded-lg p-4 shadow-md border border-border">
@@ -76,25 +64,6 @@ export default function RoomInfo({
         </p>
       </div>
       
-      <div className="mb-4">
-        <div className="flex justify-between items-center">
-          <p className="text-sm text-muted-foreground">Your name:</p>
-          <button 
-            onClick={handleRandomUsername}
-            className="text-xs bg-muted hover:bg-accent text-foreground px-2 py-1 rounded"
-            type="button"
-          >
-            Random
-          </button>
-        </div>
-        <div className="mt-1 font-medium">
-          <UsernameEditor 
-            currentUsername={currentUser} 
-            onUsernameChange={onUsernameChange} 
-          />
-        </div>
-      </div>
-      
       <div>
         <p className="text-sm text-muted-foreground mb-2">Users in Room ({users.length}):</p>
           <ul ref={userListRef} className="space-y-1 max-h-[200px] overflow-y-auto pr-2">
@@ -112,15 +81,23 @@ export default function RoomInfo({
                   className="flex items-center text-foreground py-1"
                 >
                   <span className="h-2 w-2 rounded-full bg-secondary mr-2 flex-shrink-0"></span>
-                  <span className="truncate">
-                    {user.clientId === currentClientId 
-                      ? `${user.userId} (You)` 
-                      : user.userId
-                    }
-                  </span>
+                  
+                  {/* Only show editor for current user */}
+                  {user.clientId === currentClientId ? (
+                    <div className="truncate flex items-center">
+                      <UsernameEditor 
+                        currentUsername={user.userId} 
+                        onUsernameChange={onUsernameChange}
+                      />
+                    </div>
+                  ) : (
+                    <span className="truncate">{user.userId}</span>
+                  )}
                 </li>
               ))}
           </ul>
+          
+
       </div>
     </div>
   );
