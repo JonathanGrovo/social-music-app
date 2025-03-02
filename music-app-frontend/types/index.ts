@@ -1,11 +1,11 @@
 // types/index.ts
 
 export interface ChatMessage {
-  userId: string;
+  username: string;    // Renamed from userId
   content: string;
   timestamp: number;
-  clientId: string; // Make clientId required to ensure proper tracking
-  avatarId?: string; // Add avatar ID to messages
+  clientId: string;    // Still needed for identification
+  avatarId?: string;   // Optional avatar for the message
 }
 
 export interface QueueItem {
@@ -17,9 +17,10 @@ export interface QueueItem {
 }
 
 export interface UserInfo {
-  userId: string;   // Username
-  clientId: string; // Unique client identifier
-  avatarId: string; // Avatar identifier
+  username: string;    // Renamed from userId - this is the display name
+  clientId: string;    // Unique identifier for the user's connection
+  avatarId: string;    // Avatar identifier
+  isRoomOwner?: boolean; // Whether this user owns the room
 }
 
 export interface RoomState {
@@ -44,5 +45,5 @@ export enum EventType {
   SYNC_REQUEST = 'SYNC_REQUEST',
   SYNC_RESPONSE = 'SYNC_RESPONSE',
   USERNAME_CHANGE = 'USERNAME_CHANGE',
-  AVATAR_CHANGE = 'AVATAR_CHANGE' // Add new event type
+  AVATAR_CHANGE = 'AVATAR_CHANGE'  // New event type for avatar changes
 }

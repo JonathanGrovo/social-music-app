@@ -8,29 +8,33 @@ import { generateRandomAvatarId } from '../utils/avatar';
 
 export default function Home() {
   const [roomName, setRoomName] = useState('');
-  const [userName, setUserName] = useState('');
+  const [username, setUsername] = useState('');  // Renamed from userName
+  const [avatarId, setAvatarId] = useState('avatar1');
   const [error, setError] = useState('');
   const [joinRoomId, setJoinRoomId] = useState('');
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const router = useRouter();
 
-  // Set initial username on component mount
+  // Set initial username and avatar on component mount
   useEffect(() => {
     // Check if there's a stored username
-    const storedUsername = localStorage.getItem('userId');
+    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId');
+    const storedAvatarId = localStorage.getItem('avatarId');
+    
     if (storedUsername) {
-      setUserName(storedUsername);
+      setUsername(storedUsername);
     } else {
       // Generate and set a random username
       const newUsername = generateUsername();
-      setUserName(newUsername);
+      setUsername(newUsername);
     }
     
-    // Check if there's a stored avatar ID, if not generate one
-    const storedAvatarId = localStorage.getItem('avatarId');
-    if (!storedAvatarId) {
+    if (storedAvatarId) {
+      setAvatarId(storedAvatarId);
+    } else {
+      // Generate and set a random avatar
       const newAvatarId = generateRandomAvatarId();
-      localStorage.setItem('avatarId', newAvatarId);
+      setAvatarId(newAvatarId);
     }
   }, []);
 
@@ -40,7 +44,7 @@ export default function Home() {
       return;
     }
     
-    if (!userName.trim()) {
+    if (!username.trim()) {
       setError('Your name is required');
       return;
     }
@@ -49,16 +53,15 @@ export default function Home() {
       setIsCreatingRoom(true);
       
       // Store the username
-      localStorage.setItem('userId', userName);
+      localStorage.setItem('username', username);
+      localStorage.setItem('userId', username);  // For backward compatibility
+      
+      // Store the avatar
+      localStorage.setItem('avatarId', avatarId);
       
       // Create a unique client ID
-      const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const clientId = `${username}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       localStorage.setItem('clientId', clientId);
-      
-      // Ensure we have an avatar ID
-      if (!localStorage.getItem('avatarId')) {
-        localStorage.setItem('avatarId', generateRandomAvatarId());
-      }
       
       // Create room on the server
       const response = await fetch('http://localhost:3000/api/rooms', {
@@ -90,29 +93,26 @@ export default function Home() {
       return;
     }
     
-    if (!userName.trim()) {
+    if (!username.trim()) {
       setError('Your name is required');
       return;
     }
 
     // Store the username
-    localStorage.setItem('userId', userName);
+    localStorage.setItem('username', username);
+    localStorage.setItem('userId', username);  // For backward compatibility
+    
+    // Store the avatar
+    localStorage.setItem('avatarId', avatarId);
     
     // Create a unique client ID
-    const clientId = `${userName}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const clientId = `${username}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     localStorage.setItem('clientId', clientId);
-    
-    // Ensure we have an avatar ID
-    if (!localStorage.getItem('avatarId')) {
-      localStorage.setItem('avatarId', generateRandomAvatarId());
-    }
     
     // Redirect directly to the room-content page
     window.location.href = `/room-content/${joinRoomId}`;
   };
 
-  // Rest of the component remains the same...
-  
   // If creating a room, show loading screen
   if (isCreatingRoom) {
     return (
@@ -145,8 +145,8 @@ export default function Home() {
           <label className="block text-foreground mb-2">Your Name</label>
           <input
             type="text"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full px-3 py-2 border rounded bg-input text-foreground border-border"
             placeholder="Enter your name"
           />

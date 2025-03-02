@@ -1,68 +1,67 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
 import UsernameEditor from './UsernameEditor';
 import AvatarSelector from './AvatarSelector';
-import { getAvatarPath } from '../utils/avatar';
 import { UserInfo } from '../types';
 
 interface RoomInfoProps {
   roomId: string;
   users: UserInfo[];
-  currentUser: string;
+  currentUsername: string;
   currentClientId: string;
   currentAvatarId: string;
   onUsernameChange: (newUsername: string) => void;
-  onAvatarChange: (newAvatarId: string) => void;
+  onAvatarChange?: (newAvatarId: string) => void;
 }
 
 export default function RoomInfo({ 
   roomId, 
   users, 
-  currentUser, 
+  currentUsername,
   currentClientId,
   currentAvatarId,
   onUsernameChange,
   onAvatarChange
 }: RoomInfoProps) {
   const [copied, setCopied] = useState(false);
+  const [editingAvatar, setEditingAvatar] = useState(false);
   const userListRef = useRef<HTMLUListElement>(null);
   
-  // At the top of your RoomInfo component, add this:
+  // For debugging
   useEffect(() => {
     console.log('RoomInfo Props:', {
-      roomId,
-      users,
-      currentUser,
-      currentClientId,
+      roomId, 
+      users, 
+      currentUsername, 
+      currentClientId, 
       currentAvatarId
     });
     
-    // Log the type of each prop
+    // Check data types
     console.log('Props types:', {
       roomId: typeof roomId,
       users: Array.isArray(users) ? 'array' : typeof users,
-      currentUser: typeof currentUser,
+      currentUsername: typeof currentUsername,
       currentClientId: typeof currentClientId,
       currentAvatarId: typeof currentAvatarId
     });
     
-    // If users is an array, check each user
+    // Log each user's structure
     if (Array.isArray(users)) {
       users.forEach((user, index) => {
         console.log(`User ${index}:`, user, typeof user);
       });
     }
-  }, [roomId, users, currentUser, currentClientId, currentAvatarId]);
-
-
-  // For debugging
-  useEffect(() => {
+    
     console.log('RoomInfo rendering with users:', users);
-    console.log('Current user info:', { currentUser, currentClientId, currentAvatarId });
-  }, [users, currentUser, currentClientId, currentAvatarId]);
-
+    console.log('Current user info:', {
+      currentUsername, 
+      currentClientId, 
+      currentAvatarId
+    });
+  }, [users, currentUsername, currentClientId, currentAvatarId, roomId]);
+  
   // Generate room URL
   const roomUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/room/${roomId}` 
@@ -73,6 +72,13 @@ export default function RoomInfo({
     navigator.clipboard.writeText(roomUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+  
+  const handleAvatarChange = (newAvatarId: string) => {
+    setEditingAvatar(false);
+    if (onAvatarChange) {
+      onAvatarChange(newAvatarId);
+    }
   };
 
   return (
@@ -95,57 +101,90 @@ export default function RoomInfo({
         </p>
       </div>
       
-      <div className="mb-4">
-        <p className="text-sm text-muted-foreground mb-2">Your Profile:</p>
-        <div className="flex items-center space-x-3 p-2 bg-muted rounded-lg">
-          <AvatarSelector 
-            currentAvatarId={currentAvatarId}
-            onAvatarChange={onAvatarChange}
-          />
-          <div className="flex-1">
+      {/* Your profile section */}
+      <div className="border-b border-border pb-4 mb-4">
+        <h3 className="text-sm font-semibold mb-2 text-foreground">Your Profile</h3>
+        <div className="flex items-center">
+          {/* Avatar with edit button */}
+          <div className="relative mr-3">
+            <div 
+              className="w-12 h-12 rounded-full overflow-hidden cursor-pointer border-2 border-primary"
+              onClick={() => setEditingAvatar(true)}
+            >
+              <img 
+                src={`/avatars/${currentAvatarId}.png`} 
+                alt="Your Avatar" 
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <button 
+              className="absolute bottom-0 right-0 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+              onClick={() => setEditingAvatar(true)}
+              title="Change avatar"
+            >
+              ✎
+            </button>
+          </div>
+          
+          {/* Username editor */}
+          <div>
             <UsernameEditor 
-              currentUsername={currentUser} 
+              currentUsername={currentUsername} 
               onUsernameChange={onUsernameChange}
             />
           </div>
         </div>
+        
+        {/* Avatar selector dialog */}
+        {editingAvatar && onAvatarChange && (
+          <div className="mt-3">
+            <AvatarSelector 
+              currentAvatarId={currentAvatarId}
+              onSelect={handleAvatarChange}
+              onCancel={() => setEditingAvatar(false)}
+            />
+          </div>
+        )}
       </div>
       
       <div>
         <p className="text-sm text-muted-foreground mb-2">Users in Room ({users.length}):</p>
-        <ul ref={userListRef} className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-          {[...users]
-            .sort((a, b) => {
-              // Current user goes to the top
-              if (a.clientId === currentClientId) return -1;
-              if (b.clientId === currentClientId) return 1;
-              // Otherwise maintain the existing order
-              return 0;
-            })
-            .map((user) => (
-              <li 
-                key={`user-${user.clientId}`} 
-                className="flex items-center text-foreground p-2 rounded-md hover:bg-muted"
-              >
-                <div className="h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
-                  <Image 
-                    src={getAvatarPath(user.avatarId)}
-                    alt={`${user.userId}'s avatar`}
-                    width={32}
-                    height={32}
-                    className="object-cover w-full h-full"
+        <ul ref={userListRef} className="space-y-1 max-h-[200px] overflow-y-auto pr-2">
+          {Array.isArray(users) && users.map((user) => (
+            <li 
+              key={`user-${user.clientId}`} 
+              className="flex items-center text-foreground py-1"
+            >
+              {/* Room owner crown if applicable */}
+              {user.isRoomOwner && (
+                <span className="text-yellow-500 mr-1" title="Room Owner">👑</span>
+              )}
+              
+              {/* Status indicator dot */}
+              <span className={`h-2 w-2 rounded-full ${user.isRoomOwner ? 'bg-primary' : 'bg-secondary'} mr-2 flex-shrink-0`}></span>
+              
+              {/* Avatar */}
+              <div className="w-6 h-6 rounded-full overflow-hidden mr-2 flex-shrink-0">
+                <img 
+                  src={`/avatars/${user.avatarId || 'avatar1'}.png`} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              
+              {/* Username - show editor for current user */}
+              {user.clientId === currentClientId ? (
+                <div className="truncate flex items-center">
+                  <UsernameEditor 
+                    currentUsername={currentUsername} 
+                    onUsernameChange={onUsernameChange}
                   />
                 </div>
-                <div className="flex-1 truncate">
-                  <span className="truncate">
-                    {user.userId}
-                    {user.clientId === currentClientId && 
-                      <span className="ml-1 text-xs opacity-60">(You)</span>
-                    }
-                  </span>
-                </div>
-              </li>
-            ))}
+              ) : (
+                <span className="truncate">{user.username}</span>
+              )}
+            </li>
+          ))}
         </ul>
       </div>
     </div>

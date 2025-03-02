@@ -1,26 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
 import { ChatMessage } from '../types';
-import { formatMessageTime } from '../utils/formatMessageTime';
-import { getAvatarPath } from '../utils/avatar';
 
 interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   username: string;
   clientId: string;
-  users: Array<{ userId: string; clientId: string; avatarId: string }>;
+  avatarId: string;
 }
 
-export default function ChatBox({ 
-  messages, 
-  onSendMessage, 
-  username, 
-  clientId, 
-  users 
-}: ChatBoxProps) {
+export default function ChatBox({ messages, onSendMessage, username, clientId, avatarId }: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +31,11 @@ export default function ChatBox({
       handleSend();
     }
   };
+
+  // Log messages for debugging
+  useEffect(() => {
+    console.log('ChatBox messages:', messages);
+  }, [messages]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -66,13 +62,14 @@ export default function ChatBox({
     return () => container.removeEventListener('scroll', handleScroll);
   }, [autoScroll]);
 
-  // Helper to get avatar for a message
-  const getMessageAvatar = (message: ChatMessage) => {
-    // Find the user that sent this message
-    const user = users.find(u => u.clientId === message.clientId);
-    
-    // Return the user's avatar if found, or use message avatar, or fallback to first avatar
-    return user?.avatarId || message.avatarId || 'avatar1';
+  // Format timestamp to more readable form
+  const formatTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
+    }).format(date);
   };
 
   return (
@@ -89,39 +86,36 @@ export default function ChatBox({
         {messages.map((msg) => (
           <div
             key={`${msg.clientId}-${msg.timestamp}`}
-            className="flex items-start"
+            className="flex flex-col items-start"
           >
-            {/* Avatar */}
-            <div className="h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
-              <Image 
-                src={getAvatarPath(getMessageAvatar(msg))}
-                alt={`${msg.userId}'s avatar`}
-                width={32}
-                height={32}
-                className="object-cover w-full h-full"
-              />
-            </div>
-            
-            {/* Message content */}
-            <div className="flex-1 min-w-0">
-              <div 
-                className={`
-                  px-3 py-2 rounded-lg 
-                  ${msg.clientId === clientId 
-                    ? 'bg-message-own text-message-own-text' 
-                    : 'bg-message-other text-message-other-text'}
-                `}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="font-semibold text-xs">
-                    {msg.userId}                    
-                    {msg.clientId === clientId && <span className="ml-1 text-xs opacity-50">(You)</span>}
+            <div className="flex items-start max-w-full">
+              {/* Avatar image */}
+              <div className="w-8 h-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
+                <img 
+                  src={`/avatars/${msg.avatarId || 'avatar1'}.png`} 
+                  alt="Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <div 
+                  className={`
+                    px-3 py-2 rounded-lg 
+                    ${msg.clientId === clientId 
+                      ? 'bg-message-own text-message-own-text' 
+                      : 'bg-message-other text-message-other-text'}
+                  `}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="font-semibold text-xs truncate mr-2">
+                      {msg.username}
+                      {msg.clientId === clientId && <span className="ml-1 text-xs opacity-50">(You)</span>}
+                    </div>
+                    <span className="text-xs opacity-70">{formatTimestamp(msg.timestamp)}</span>
                   </div>
-                  <div className="text-xs opacity-60 ml-2">
-                    {formatMessageTime(msg.timestamp)}
-                  </div>
+                  <div className="break-words">{msg.content}</div>
                 </div>
-                <div className="break-words">{msg.content}</div>
               </div>
             </div>
           </div>

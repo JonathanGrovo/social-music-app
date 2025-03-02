@@ -7,17 +7,16 @@ import ChatBox from '../../../components/ChatBox';
 import PlayerControls from '../../../components/PlayerControls';
 import Queue from '../../../components/Queue';
 import RoomInfo from '../../../components/RoomInfo';
-import { generateRandomAvatarId } from '../../../utils/avatar';
 
 export default function RoomContentPage() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.roomId as string;
   
-  // Get stored user info
+  // Get stored user info - renamed userId to username
   const [username, setUsername] = useState<string>('');
   const [clientId, setClientId] = useState<string>('');
-  const [avatarId, setAvatarId] = useState<string>('');
+  const [avatarId, setAvatarId] = useState<string>('avatar1');
   
   // Connection states
   const [isLoading, setIsLoading] = useState(true);
@@ -35,15 +34,9 @@ export default function RoomContentPage() {
   // Initialize on mount
   useEffect(() => {
     // Get username and clientId from localStorage
-    const storedUsername = localStorage.getItem('userId');
+    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId'); // Support both new and old keys
     const storedClientId = localStorage.getItem('clientId');
-    
-    // Get avatar ID from localStorage or generate a new one
-    let storedAvatarId = localStorage.getItem('avatarId');
-    if (!storedAvatarId) {
-      storedAvatarId = generateRandomAvatarId();
-      localStorage.setItem('avatarId', storedAvatarId);
-    }
+    const storedAvatarId = localStorage.getItem('avatarId') || 'avatar1';
     
     if (!storedUsername || !storedClientId) {
       console.error('Missing user info');
@@ -59,7 +52,7 @@ export default function RoomContentPage() {
     console.log(`Room content initialized: User ${storedUsername}, Client ${storedClientId}, Avatar ${storedAvatarId}`);
   }, []);
   
-  // Initialize socket with roomId, username, clientId, and avatarId
+  // Initialize socket with roomId, username, and clientId
   const {
     socket,
     connected,
@@ -92,8 +85,9 @@ export default function RoomContentPage() {
     
     console.log(`Changing username from ${username} to ${newUsername}`);
     
-    // Store the new username in localStorage
-    localStorage.setItem('userId', newUsername);
+    // Store the new username in localStorage - update both keys for compatibility
+    localStorage.setItem('username', newUsername);
+    localStorage.setItem('userId', newUsername); // For backward compatibility
     
     // Update local state immediately
     setUsername(newUsername);
@@ -113,13 +107,13 @@ export default function RoomContentPage() {
     
     console.log(`Changing avatar from ${avatarId} to ${newAvatarId}`);
     
-    // Store the new avatar ID in localStorage
+    // Store the new avatar in localStorage
     localStorage.setItem('avatarId', newAvatarId);
     
     // Update local state immediately
     setAvatarId(newAvatarId);
     
-    // Use the changeAvatar method
+    // Use the changeAvatar method if available
     if (changeAvatar) {
       changeAvatar(newAvatarId);
     }
@@ -191,7 +185,7 @@ export default function RoomContentPage() {
             <RoomInfo
               roomId={roomId}
               users={roomState.users}
-              currentUser={username}
+              currentUsername={username}  // Renamed from currentUser
               currentClientId={clientId}
               currentAvatarId={avatarId}
               onUsernameChange={handleUsernameChange}
@@ -200,9 +194,9 @@ export default function RoomContentPage() {
             <ChatBox
               messages={roomState.chatHistory}
               onSendMessage={sendChatMessage}
-              username={username}
+              username={username}  // Renamed from userId
               clientId={clientId}
-              users={roomState.users}
+              avatarId={avatarId}
             />
           </div>
         </div>

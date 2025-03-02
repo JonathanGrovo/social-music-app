@@ -9,13 +9,15 @@ export enum EventType {
   SYNC_REQUEST = 'SYNC_REQUEST',
   SYNC_RESPONSE = 'SYNC_RESPONSE',
   USERNAME_CHANGE = 'USERNAME_CHANGE',
-  AVATAR_CHANGE = 'AVATAR_CHANGE'
+  AVATAR_CHANGE = 'AVATAR_CHANGE',
+  ROOM_OWNER_CHANGE = 'ROOM_OWNER_CHANGE'  // New event for room ownership changes
 }
 
 export interface SocketMessage {
   roomId: string;
-  userId: string;
-  clientId: string; // Client ID is now required
+  username: string;   // Renamed from userId
+  clientId: string;   // Client ID is required
+  avatarId?: string;  // Optional avatar ID
   payload: any;
   timestamp: number;
 }
@@ -49,16 +51,11 @@ export interface QueueMessage extends SocketMessage {
 
 export interface UsernameChangeMessage extends SocketMessage {
   payload: {
-    oldUsername: string;
-    newUsername: string;
+    oldUsername: string;  // Renamed from oldUserId
+    newUsername: string;  // Renamed from newUserId
     clientId: string;
+    avatarId?: string;
   };
-}
-
-// Type for user info in room
-export interface UserInfo {
-  userId: string; // Username
-  clientId: string; // Unique client identifier
 }
 
 export interface AvatarChangeMessage extends SocketMessage {
@@ -66,5 +63,21 @@ export interface AvatarChangeMessage extends SocketMessage {
     oldAvatarId: string;
     newAvatarId: string;
     clientId: string;
+    username: string;  // Renamed from userId
   };
+}
+
+export interface RoomOwnerChangeMessage extends SocketMessage {
+  payload: {
+    newOwnerClientId: string;
+    newOwnerUsername: string;
+  };
+}
+
+// Type for user info in room
+export interface UserInfo {
+  username: string;    // Renamed from userId - display name
+  clientId: string;    // Unique client identifier
+  avatarId: string;    // Avatar identifier
+  isRoomOwner?: boolean; // Whether this user owns the room
 }
