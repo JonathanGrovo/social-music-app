@@ -1,7 +1,9 @@
+// components/ChatBox.tsx
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
+import { formatMessageTime } from '../utils/formatMessageTime';
 
 interface ChatBoxProps {
   messages: ChatMessage[];
@@ -11,12 +13,67 @@ interface ChatBoxProps {
   avatarId: string;
 }
 
+// Time threshold for grouping messages (in milliseconds)
+const MESSAGE_GROUPING_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
+// Interface for grouped messages
+interface MessageGroup {
+  authorClientId: string;
+  authorUsername: string;
+  authorAvatarId: string;
+  isCurrentUser: boolean;
+  timestamp: number; // timestamp of first message in group
+  messages: {
+    content: string;
+    timestamp: number;
+    id: string; // Using clientId-timestamp as unique ID
+  }[];
+}
+
 export default function ChatBox({ messages, onSendMessage, username, clientId, avatarId }: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const prevMessagesLengthRef = useRef(messages.length);
+  
+  // Group messages by author and time
+  const groupedMessages = messages.reduce((groups: MessageGroup[], msg) => {
+    const isCurrentUser = msg.clientId === clientId;
+    const msgId = `${msg.clientId}-${msg.timestamp}`;
+    
+    // Try to add to the last group if from same author and within time threshold
+    const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+    
+    if (
+      lastGroup && 
+      lastGroup.authorClientId === msg.clientId &&
+      msg.timestamp - lastGroup.messages[lastGroup.messages.length - 1].timestamp < MESSAGE_GROUPING_THRESHOLD
+    ) {
+      // Add to existing group
+      lastGroup.messages.push({
+        content: msg.content,
+        timestamp: msg.timestamp,
+        id: msgId
+      });
+    } else {
+      // Create new group
+      groups.push({
+        authorClientId: msg.clientId,
+        authorUsername: msg.username,
+        authorAvatarId: msg.avatarId || 'avatar1',
+        isCurrentUser,
+        timestamp: msg.timestamp,
+        messages: [{
+          content: msg.content,
+          timestamp: msg.timestamp,
+          id: msgId
+        }]
+      });
+    }
+    
+    return groups;
+  }, []);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -31,11 +88,6 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
       handleSend();
     }
   };
-
-  // Log messages for debugging
-  useEffect(() => {
-    console.log('ChatBox messages:', messages);
-  }, [messages]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -62,14 +114,39 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
     return () => container.removeEventListener('scroll', handleScroll);
   }, [autoScroll]);
 
-  // Format timestamp to more readable form
-  const formatTimestamp = (timestamp: number): string => {
+  // Format time only (HH:MM AM/PM)
+  const formatTimeOnly = (timestamp: number): string => {
     const date = new Date(timestamp);
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
-      minute: 'numeric',
+      minute: '2-digit',
       hour12: true
     }).format(date);
+  };
+  
+  // Format date for message groups
+  const formatMessageDate = (timestamp: number): string => {
+    const messageDate = new Date(timestamp);
+    const now = new Date();
+    
+    // Check if the message is from today
+    if (messageDate.toDateString() === now.toDateString()) {
+      return 'Today at ' + formatTimeOnly(timestamp);
+    }
+    
+    // Check if the message is from yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (messageDate.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday at ' + formatTimeOnly(timestamp);
+    }
+    
+    // For older messages, include the date
+    return messageDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ' at ' + formatTimeOnly(timestamp);
   };
 
   return (
@@ -80,44 +157,79 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
       
       <div 
         ref={messagesContainerRef}
-        className="overflow-y-auto flex-1 p-4 space-y-4"
+        className="overflow-y-auto flex-1 p-4 space-y-6"
         style={{ overflowAnchor: 'auto' }}
       >
-        {messages.map((msg) => (
+        {groupedMessages.map((group) => (
           <div
-            key={`${msg.clientId}-${msg.timestamp}`}
-            className="flex flex-col items-start"
+            key={`group-${group.authorClientId}-${group.timestamp}`}
+            className="flex flex-col space-y-0.5"
           >
-            <div className="flex items-start max-w-full">
-              {/* Avatar image */}
-              <div className="w-8 h-8 rounded-full overflow-hidden mr-2 flex-shrink-0">
+            {/* First message with author info */}
+            <div className="flex items-start relative group">
+              {/* Avatar */}
+              <div className="w-10 h-10 rounded-full overflow-hidden mr-3 flex-shrink-0 mt-0.5 relative z-10">
                 <img 
-                  src={`/avatars/${msg.avatarId || 'avatar1'}.png`} 
+                  src={`/avatars/${group.authorAvatarId}.png`} 
                   alt="Avatar" 
                   className="w-full h-full object-cover"
                 />
               </div>
               
-              <div className="flex-1 min-w-0">
-                <div 
-                  className={`
-                    px-3 py-2 rounded-lg 
-                    ${msg.clientId === clientId 
-                      ? 'bg-message-own text-message-own-text' 
-                      : 'bg-message-other text-message-other-text'}
-                  `}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="font-semibold text-xs truncate mr-2">
-                      {msg.username}
-                      {msg.clientId === clientId && <span className="ml-1 text-xs opacity-50">(You)</span>}
-                    </div>
-                    <span className="text-xs opacity-70">{formatTimestamp(msg.timestamp)}</span>
-                  </div>
-                  <div className="break-words">{msg.content}</div>
+              {/* The full-width background that appears on hover - extends behind avatar to edges of chatbox */}
+              <div 
+                className="absolute left-0 right-0 top-0 bottom-0 opacity-0 group-hover:opacity-100 bg-black bg-opacity-5 dark:bg-opacity-7 z-0" 
+                style={{ 
+                  transition: 'opacity 0s',
+                  marginLeft: '-16px', /* Negative margin to extend to left edge (matches p-4 of container) */
+                  marginRight: '-16px', /* Negative margin to extend to right edge */
+                  marginTop: '-8px', /* Negative margin to extend higher */
+                  width: 'calc(100% + 32px)', /* Full width plus padding on both sides */
+                  height: 'calc(100% + 8px)' /* Add extra height to match negative top margin */
+                }}
+              ></div>
+
+              {/* Message content container */}
+              <div className="flex-1 min-w-0 relative z-10">
+                {/* Author name and timestamp */}
+                <div className="flex items-baseline mb-1">
+                  <span className="font-semibold text-foreground mr-2">
+                    {group.authorUsername}
+                    {group.isCurrentUser && <span className="ml-1 text-xs opacity-50">(You)</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatMessageDate(group.timestamp)}
+                  </span>
+                </div>
+                
+                {/* First message content */}
+                <div className="break-words w-full mb-1">
+                  {group.messages[0].content}
                 </div>
               </div>
             </div>
+            
+            {/* Subsequent messages in the group */}
+            {group.messages.slice(1).map((msg, idx) => (
+              <div 
+                key={msg.id} 
+                className="relative group/msg mx-[-16px] px-[16px] hover:bg-black hover:bg-opacity-5 dark:hover:bg-opacity-7"
+                style={{ transition: 'background-color 0s' }}
+              >
+                {/* Timestamp that appears on hover */}
+                <div 
+                  className="opacity-0 group-hover/msg:opacity-100 text-xs text-muted-foreground absolute left-[7px] top-1/2 -translate-y-1/2 w-[54px] text-center"
+                  style={{ transition: 'opacity 0s' }}
+                >
+                  {formatTimeOnly(msg.timestamp)}
+                </div>
+                
+                {/* Message content */}
+                <div className="break-words w-full min-h-[20px] py-1 pl-[52px] pr-4">
+                  {msg.content}
+                </div>
+              </div>
+            ))}
           </div>
         ))}
         <div ref={messagesEndRef} />
