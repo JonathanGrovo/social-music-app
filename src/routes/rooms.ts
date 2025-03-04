@@ -66,11 +66,15 @@ router.get('/:roomId', (req, res) => {
       }
     });
   }
+
+  // Get room name from metadata if it exists
+  const roomName = roomState.roomName || 'Unnamed Room';
   
   // Return room details
   res.status(200).json({
     room: {
       id: roomId,
+      name: roomName,
       users: socketManager.getRoomUsers(roomId),
       userCount: roomState.users.size,
       currentTrack: roomState.currentTrack,
@@ -89,7 +93,7 @@ router.post('/', validateRoomCreation, (req, res) => {
   // Initialize room state in SocketManager
   if (socketManager) {
     // This will create an empty room state
-    socketManager.createRoom(roomId);
+    socketManager.createRoom(roomId, name);
   }
   
   res.status(201).json({

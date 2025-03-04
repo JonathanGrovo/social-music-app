@@ -62,6 +62,9 @@ export default function Home() {
       // Create a unique client ID
       const clientId = `${username}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       localStorage.setItem('clientId', clientId);
+
+      // Store the last room name
+      localStorage.setItem('lastRoomName', roomName);
       
       // Create room on the server
       const response = await fetch('http://localhost:3000/api/rooms', {
@@ -73,7 +76,7 @@ export default function Home() {
       const data = await response.json();
       
       if (response.ok) {
-        console.log(`Room created: ${data.room.id}`);
+        console.log(`Room created: ${data.room.id} with name: ${roomName}`);
         // Redirect to the room-content page
         window.location.href = `/room-content/${data.room.id}`;
       } else {

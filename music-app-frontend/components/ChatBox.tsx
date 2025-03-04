@@ -1,9 +1,10 @@
-// components/ChatBox.tsx
+// components/ChatBox.tsx with properly typed markdown components
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
 import { formatMessageTime } from '../utils/formatMessageTime';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatBoxProps {
   messages: ChatMessage[];
@@ -11,6 +12,7 @@ interface ChatBoxProps {
   username: string;
   clientId: string;
   avatarId: string;
+  roomName?: string;
 }
 
 // Time threshold for grouping messages (in milliseconds)
@@ -30,8 +32,16 @@ interface MessageGroup {
   }[];
 }
 
-export default function ChatBox({ messages, onSendMessage, username, clientId, avatarId }: ChatBoxProps) {
+export default function ChatBox({ 
+  messages, 
+  onSendMessage, 
+  username, 
+  clientId, 
+  avatarId,
+  roomName = "the room" // Default room name if not provided
+}: ChatBoxProps) {
   const [message, setMessage] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -79,15 +89,50 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
     if (message.trim()) {
       onSendMessage(message);
       setMessage('');
+      
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
     }
   };
 
+  // Handle key presses with Shift+Enter support
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift+Enter: add a new line
+        return; // Let the default behavior happen
+      } else {
+        // Just Enter: send the message
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
+
+  // Auto-resize textarea as content grows
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      // Reset height temporarily to get the correct scrollHeight
+      textareaRef.current.style.height = 'auto';
+      
+      // Set to scrollHeight to match content
+      const scrollHeight = textareaRef.current.scrollHeight;
+      
+      // Apply max height if needed
+      if (scrollHeight <= 200) { // Max height before scrolling
+        textareaRef.current.style.height = scrollHeight + 'px';
+      } else {
+        textareaRef.current.style.height = '200px';
+      }
+    }
+  };
+
+  // Update textarea height when input changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [message]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -148,6 +193,18 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
       year: 'numeric'
     }) + ' at ' + formatTimeOnly(timestamp);
   };
+  
+  // Simpler implementation to avoid TypeScript issues
+  const renderWithMarkdown = (content: string) => {
+    // Simple implementation to handle basic markdown without custom components
+    return (
+      <div className="markdown-content">
+        <ReactMarkdown>
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-[400px] bg-card rounded-lg shadow-md overflow-hidden border border-border">
@@ -189,8 +246,8 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
                 }}
               ></div>
 
-              {/* Message content container */}
-              <div className="flex-1 min-w-0 relative z-10">
+              {/* Message content container - reduced max width for earlier wrapping */}
+              <div className="flex-1 min-w-0 relative z-10 max-w-[calc(100%-40px)]">
                 {/* Author name and timestamp */}
                 <div className="flex items-baseline mb-1 flex-wrap">
                   <span className="font-semibold text-foreground mr-2 break-words max-w-[85%] overflow-wrap-anywhere">
@@ -202,9 +259,9 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
                   </span>
                 </div>
                 
-                {/* First message content */}
-                <div className="break-words w-full mb-1">
-                  {group.messages[0].content}
+                {/* First message content with markdown */}
+                <div className="break-words w-full mb-1 pr-8">
+                  {renderWithMarkdown(group.messages[0].content)}
                 </div>
               </div>
             </div>
@@ -224,9 +281,9 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
                   {formatTimeOnly(msg.timestamp)}
                 </div>
                 
-                {/* Message content */}
-                <div className="break-words w-full min-h-[20px] py-1 pl-[52px] pr-4">
-                  {msg.content}
+                {/* Message content with markdown */}
+                <div className="break-words w-full min-h-[20px] py-1 pl-[52px] pr-8">
+                  {renderWithMarkdown(msg.content)}
                 </div>
               </div>
             ))}
@@ -235,22 +292,48 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
         <div ref={messagesEndRef} />
       </div>
       
-      <div className="border-t border-border p-2 bg-muted">
-        <div className="flex">
-          <input
-            type="text"
+      {/* Discord-style chat input with textarea for multiline support */}
+      <div className="px-4 pb-4">
+        <div className="flex items-start bg-[#383a40] dark:bg-[#40444b] rounded-lg overflow-hidden">
+          {/* Upload/attachment button */}
+          <button className="text-muted-foreground hover:text-foreground p-2 ml-2 mt-1 flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </button>
+          
+          {/* Message textarea with auto-resize */}
+          <textarea
+            ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 border rounded-l px-3 py-2 bg-input text-foreground border-border focus:outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Type a message..."
+            className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none min-h-[40px] max-h-[200px] overflow-y-auto"
+            placeholder={`Message ${roomName}`}
+            rows={1}
+            style={{ height: 'auto' }}
           />
+          
+          {/* Send button - updated to match Save button purple */}
           <button
             type="button" 
             onClick={handleSend}
-            className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-r"
+            disabled={!message.trim()}
+            className={`p-2 mx-2 rounded flex-shrink-0 mt-1 ${
+              message.trim() 
+                ? 'text-[#5865f2] hover:text-[#4752c4] transition-colors duration-200' 
+                : 'text-[#4f5660] cursor-not-allowed'
+            }`}
+            style={{
+              cursor: message.trim() ? 'pointer' : 'not-allowed'
+            }}
           >
-            Send
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
           </button>
         </div>
       </div>

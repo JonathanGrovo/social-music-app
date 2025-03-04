@@ -24,6 +24,7 @@ export interface UserInfo {
 }
 
 export interface RoomState {
+  roomName?: string,
   currentTrack?: {
     id: string;
     source: 'youtube' | 'soundcloud';

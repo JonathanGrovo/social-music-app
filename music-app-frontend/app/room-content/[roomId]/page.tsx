@@ -17,6 +17,7 @@ export default function RoomContentPage() {
   const [username, setUsername] = useState<string>('');
   const [clientId, setClientId] = useState<string>('');
   const [avatarId, setAvatarId] = useState<string>('avatar1');
+  const [roomName, setRoomName] = useState<string>('');
   
   // Connection states
   const [isLoading, setIsLoading] = useState(true);
@@ -47,10 +48,49 @@ export default function RoomContentPage() {
     setUsername(storedUsername);
     setClientId(storedClientId);
     setAvatarId(storedAvatarId);
-    setIsLoading(false);
+
+    // Try to get the room name from localStorage if it was just created
+    const lastRoomName = localStorage.getItem('lastRoomName');
+    if (lastRoomName) {
+      console.log(`Found last room name in localStorage: ${lastRoomName}`);
+      setRoomName(lastRoomName);
+    }
     
     console.log(`Room content initialized: User ${storedUsername}, Client ${storedClientId}, Avatar ${storedAvatarId}`);
-  }, []);
+    
+    // Fetch room details to get the room name
+    const fetchRoomDetails = async () => {
+      try {
+        console.log(`Fetching room details for ${roomId}`);
+        const response = await fetch(`http://localhost:3000/api/rooms/${roomId}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Room details:', data);
+          // Try multiple possible paths for room name
+          let foundName = '';
+          if (data.room && data.room.name) {
+            foundName = data.room.name;
+          } else if (data.name) {
+            foundName = data.name;
+          }
+
+          if (foundName) {
+            console.log(`Setting room name to: ${foundName}`);
+            setRoomName(foundName);
+          } else {
+            console.warn('Could not find room name in response:', data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching room details:', error);
+      } finally {
+        // Always mark loading as complete after room fetch attempt
+        setIsLoading(false);
+      }
+    };
+    
+    fetchRoomDetails();
+  }, [roomId]);
   
   // Initialize socket with roomId, username, and clientId
   const {
@@ -151,7 +191,9 @@ export default function RoomContentPage() {
     <div className="min-h-screen bg-background p-4 md:p-6 overflow-y-auto">
       <div className="max-w-7xl mx-auto">
         <header className="bg-headerBackground text-headerText p-4 rounded-lg mb-6 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Social Music Room</h1>
+          <h1 className="text-xl font-bold">
+            {roomName ? roomName : 'Social Music Room'}
+          </h1>
           <div className="text-sm">
             {connected ? (
               <span className="inline-flex items-center">
@@ -185,7 +227,7 @@ export default function RoomContentPage() {
             <RoomInfo
               roomId={roomId}
               users={roomState.users}
-              currentUsername={username}  // Renamed from currentUser
+              currentUsername={username}
               currentClientId={clientId}
               currentAvatarId={avatarId}
               onUsernameChange={handleUsernameChange}
@@ -194,9 +236,10 @@ export default function RoomContentPage() {
             <ChatBox
               messages={roomState.chatHistory}
               onSendMessage={sendChatMessage}
-              username={username}  // Renamed from userId
+              username={username}
               clientId={clientId}
               avatarId={avatarId}
+              roomName={roomName || 'the room'} // Pass room name to ChatBox
             />
           </div>
         </div>

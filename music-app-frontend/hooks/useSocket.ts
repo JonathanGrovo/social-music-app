@@ -32,7 +32,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
   const [roomState, setRoomState] = useState<RoomState>({
     queue: [],
     chatHistory: [],
-    users: []
+    users: [],
+    roomName: ''
   });
   
   // Use refs to keep track of current values in callbacks
@@ -109,7 +110,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       if (updates.queue !== undefined) newState.queue = updates.queue;
       if (updates.users !== undefined) newState.users = updates.users;
       if (updates.currentTrack !== undefined) newState.currentTrack = updates.currentTrack;
-      
+      if (updates.roomName !== undefined) newState.roomName = updates.roomName;
+
       // Special handling for chat history to ensure we don't lose messages
       if (updates.chatHistory !== undefined) {
         // If we're getting a new chat history, make sure it's not empty before replacing
@@ -226,6 +228,10 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log(`Raw SYNC_RESPONSE data: ${JSON.stringify(data)}`);
       log(`User data in SYNC_RESPONSE: ${JSON.stringify(data.payload.users)}`);
       
+      // Extract room name if present
+      if (data.payload.roomName) {
+        log(`Room name from sync: ${data.payload.roomName}`);
+      }
       // Process user list from server (already in UserInfo format)
       const userList = data.payload.users || [];
       
@@ -245,7 +251,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
           username: userInfo?.username || msg.username || msg.userId || 'Unknown User',
           content: msg.content,
           timestamp: msg.timestamp,
-          avatarId: userInfo?.avatarId || msg.avatarId || 'avatar1'
+          avatarId: userInfo?.avatarId || msg.avatarId || 'avatar1',
+          roomName: data.payload.roomName || ''
         };
       });
       
@@ -283,7 +290,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
           currentTrack: data.payload.currentTrack,
           queue: data.payload.queue || [],
           chatHistory: processedChatHistory.length > 0 ? processedChatHistory : prevState.chatHistory,
-          users: updatedUserList
+          users: updatedUserList,
+          roomName: data.payload.roomName || prevState.roomName // Error is here
         };
       });
     });

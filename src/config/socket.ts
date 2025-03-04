@@ -13,6 +13,7 @@ interface UserData {
 
 // Store room state for synchronization and history
 interface RoomState {
+  roomName?: string;
   currentTrack?: {
     id: string;
     source: 'youtube' | 'soundcloud';
@@ -57,9 +58,10 @@ export class SocketManager {
   }
 
   // Helper method to get or create room state (PRIVATE)
-  private getOrCreateRoomState(roomId: string): RoomState {
+  private getOrCreateRoomState(roomId: string, roomName?: string): RoomState {
     if (!this.roomStates.has(roomId)) {
-      this.roomStates.set(roomId, { 
+      this.roomStates.set(roomId, {
+        roomName: roomName || '',
         queue: [],
         chatHistory: [],
         users: new Map<string, UserData>() // clientId -> UserData map
@@ -147,6 +149,7 @@ export class SocketManager {
           username: 'server',
           clientId: 'server',
           payload: {
+            roomName: roomState.roomName,
             currentTrack: roomState.currentTrack,
             queue: roomState.queue,
             chatHistory: roomState.chatHistory,
@@ -463,9 +466,10 @@ export class SocketManager {
   // PUBLIC methods for external access
   
   // Create a new room
-  public createRoom(roomId: string): RoomState {
+  public createRoom(roomId: string, roomName?: string): RoomState {
     // Create a new room state regardless of whether it exists
-    const roomState = { 
+    const roomState = {
+      roomName: roomName || '',
       queue: [],
       chatHistory: [],
       users: new Map<string, UserData>() // clientId -> UserData map
