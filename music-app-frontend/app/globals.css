@@ -60,3 +60,21 @@ body {
 body, * {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
+
+/* Better text wrapping for long usernames */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Make truncation work properly */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Prevent flex items from breaking layouts when content is too long */
+.min-w-0 {
+  min-width: 0;
+}

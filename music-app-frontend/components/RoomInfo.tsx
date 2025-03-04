@@ -5,6 +5,23 @@ import UsernameEditor from './UsernameEditor';
 import AvatarSelector from './AvatarSelector';
 import { UserInfo } from '../types';
 
+// Simple crown SVG component with slimmer bottom half
+function SimpleCrown({ className = "" }: { className?: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 24 24" 
+      width="18" 
+      height="18" 
+      fill="currentColor" 
+      className={className}
+    >
+      {/* Modified path to make the bottom half slimmer */}
+      <path d="M12 1L8 5L4 3L6 9L6 12H18L18 9L20 3L16 5L12 1Z" />
+    </svg>
+  );
+}
+
 interface RoomInfoProps {
   roomId: string;
   users: UserInfo[];
@@ -27,40 +44,6 @@ export default function RoomInfo({
   const [copied, setCopied] = useState(false);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const userListRef = useRef<HTMLUListElement>(null);
-  
-  // For debugging
-  useEffect(() => {
-    console.log('RoomInfo Props:', {
-      roomId, 
-      users, 
-      currentUsername, 
-      currentClientId, 
-      currentAvatarId
-    });
-    
-    // Check data types
-    console.log('Props types:', {
-      roomId: typeof roomId,
-      users: Array.isArray(users) ? 'array' : typeof users,
-      currentUsername: typeof currentUsername,
-      currentClientId: typeof currentClientId,
-      currentAvatarId: typeof currentAvatarId
-    });
-    
-    // Log each user's structure
-    if (Array.isArray(users)) {
-      users.forEach((user, index) => {
-        console.log(`User ${index}:`, user, typeof user);
-      });
-    }
-    
-    console.log('RoomInfo rendering with users:', users);
-    console.log('Current user info:', {
-      currentUsername, 
-      currentClientId, 
-      currentAvatarId
-    });
-  }, [users, currentUsername, currentClientId, currentAvatarId, roomId]);
   
   // Generate room URL
   const roomUrl = typeof window !== 'undefined' 
@@ -105,8 +88,8 @@ export default function RoomInfo({
       <div className="border-b border-border pb-4 mb-4">
         <h3 className="text-sm font-semibold mb-2 text-foreground">Your Profile</h3>
         <div className="flex items-center">
-          {/* Avatar with edit button */}
-          <div className="relative mr-3">
+          {/* Avatar with edit button - no status indicator */}
+          <div className="relative mr-3 flex-shrink-0">
             <div 
               className="w-12 h-12 rounded-full overflow-hidden cursor-pointer border-2 border-primary"
               onClick={() => setEditingAvatar(true)}
@@ -126,11 +109,12 @@ export default function RoomInfo({
             </button>
           </div>
           
-          {/* Username editor */}
-          <div>
+          {/* Username editor - without (You) in profile section */}
+          <div className="min-w-0 flex-1">
             <UsernameEditor 
               currentUsername={currentUsername} 
               onUsernameChange={onUsernameChange}
+              showYouIndicator={false}
             />
           </div>
         </div>
@@ -155,34 +139,38 @@ export default function RoomInfo({
               key={`user-${user.clientId}`} 
               className="flex items-center text-foreground py-1"
             >
-              {/* Room owner crown if applicable */}
-              {user.isRoomOwner && (
-                <span className="text-yellow-500 mr-1" title="Room Owner">👑</span>
-              )}
-              
-              {/* Status indicator dot */}
-              <span className={`h-2 w-2 rounded-full ${user.isRoomOwner ? 'bg-primary' : 'bg-secondary'} mr-2 flex-shrink-0`}></span>
-              
-              {/* Avatar */}
-              <div className="w-6 h-6 rounded-full overflow-hidden mr-2 flex-shrink-0">
-                <img 
-                  src={`/avatars/${user.avatarId || 'avatar1'}.png`} 
-                  alt="Avatar" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              
-              {/* Username - show editor for current user */}
-              {user.clientId === currentClientId ? (
-                <div className="truncate flex items-center">
-                  <UsernameEditor 
-                    currentUsername={currentUsername} 
-                    onUsernameChange={onUsernameChange}
+              {/* Avatar with status indicator at bottom right */}
+              <div className="relative mr-3 flex-shrink-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden">
+                  <img 
+                    src={`/avatars/${user.avatarId || 'avatar1'}.png`} 
+                    alt="Avatar" 
+                    className="w-full h-full object-cover"
                   />
                 </div>
-              ) : (
-                <span className="truncate">{user.username}</span>
-              )}
+                {/* Status indicator dot at bottom right */}
+                <span className="h-3 w-3 rounded-full bg-secondary absolute bottom-0 right-0 border border-card"></span>
+              </div>
+              
+              {/* Username - show just the username with (You) indicator for current user */}
+              <div className="truncate min-w-0 flex-1 flex items-center py-0.5">
+                <div className="flex flex-grow truncate min-w-0 items-center">
+                  <span className="truncate max-w-[230px] inline-block leading-none" title={user.username}>
+                    {user.username}
+                  </span>
+                  
+                  {/* Room owner crown if applicable - right after username */}
+                  {user.isRoomOwner && (
+                    <span className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center" style={{ position: 'relative', top: '3px' }} title="Room Owner">
+                      <SimpleCrown className="inline-block" />
+                    </span>
+                  )}
+                  
+                  {user.clientId === currentClientId && 
+                    <span className="ml-1 text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">(You)</span>
+                  }
+                </div>
+              </div>
             </li>
           ))}
         </ul>

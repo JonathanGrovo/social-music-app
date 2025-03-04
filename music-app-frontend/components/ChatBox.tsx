@@ -192,8 +192,8 @@ export default function ChatBox({ messages, onSendMessage, username, clientId, a
               {/* Message content container */}
               <div className="flex-1 min-w-0 relative z-10">
                 {/* Author name and timestamp */}
-                <div className="flex items-baseline mb-1">
-                  <span className="font-semibold text-foreground mr-2">
+                <div className="flex items-baseline mb-1 flex-wrap">
+                  <span className="font-semibold text-foreground mr-2 break-words max-w-[85%] overflow-wrap-anywhere">
                     {group.authorUsername}
                     {group.isCurrentUser && <span className="ml-1 text-xs opacity-50">(You)</span>}
                   </span>

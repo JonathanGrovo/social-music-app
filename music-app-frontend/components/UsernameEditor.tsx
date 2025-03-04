@@ -5,9 +5,17 @@ import { useState, useRef, useEffect } from 'react';
 interface UsernameEditorProps {
   currentUsername: string;
   onUsernameChange: (newUsername: string) => void;
+  showYouIndicator?: boolean; // Optional prop to control (You) indicator display
 }
 
-export default function UsernameEditor({ currentUsername, onUsernameChange }: UsernameEditorProps) {
+// Discord-like username character limit
+const USERNAME_MAX_LENGTH = 25;
+
+export default function UsernameEditor({ 
+  currentUsername, 
+  onUsernameChange,
+  showYouIndicator = true // Default to showing the (You) indicator
+}: UsernameEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState(currentUsername);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,14 +108,18 @@ export default function UsernameEditor({ currentUsername, onUsernameChange }: Us
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isEditing, currentUsername]);
 
+  // Character count calculation and display
+  const characterCount = username.length;
+  const isAtLimit = characterCount >= USERNAME_MAX_LENGTH;
+
   // Render either the editor form or display view
   return (
-    <div className="relative min-h-[24px]">
+    <div className="relative min-h-[24px] max-w-full">
       {isEditing ? (
         <form 
           ref={formRef}
           onSubmit={handleSubmit} 
-          className="flex items-center space-x-2"
+          className="flex flex-col items-start space-y-2 max-w-full"
         >
           <input
             ref={inputRef}
@@ -116,48 +128,63 @@ export default function UsernameEditor({ currentUsername, onUsernameChange }: Us
             onChange={(e) => {
               setUsername(e.target.value);
             }}
-            className="px-2 py-1 text-sm border rounded bg-input text-foreground border-border"
+            className={`px-2 py-1 text-sm border rounded bg-input text-foreground border-border w-full ${
+              isAtLimit ? 'border-red-500' : ''
+            }`}
             placeholder="Enter username"
-            maxLength={20}
+            maxLength={USERNAME_MAX_LENGTH}
           />
-          <button 
-            ref={saveButtonRef}
-            type="button"
-            onClick={handleSaveButtonClick}
-            className="text-xs bg-primary hover:bg-primary-hover text-white px-2 py-1 rounded"
-          >
-            Save
-          </button>
-          <button 
-            ref={cancelButtonRef}
-            type="button" 
-            onClick={handleCancel}
-            className="text-xs bg-muted hover:bg-accent text-foreground px-2 py-1 rounded"
-          >
-            Cancel
-          </button>
+          
+          <div className="flex items-center justify-between w-full">
+            <div className={`text-xs ${isAtLimit ? 'text-red-500' : 'text-muted-foreground'}`}>
+              {characterCount}/{USERNAME_MAX_LENGTH}
+            </div>
+            
+            <div className="flex space-x-2">
+              <button 
+                ref={cancelButtonRef}
+                type="button" 
+                onClick={handleCancel}
+                className="text-xs bg-muted hover:bg-accent text-foreground px-2 py-1 rounded"
+              >
+                Cancel
+              </button>
+              <button 
+                ref={saveButtonRef}
+                type="button"
+                onClick={handleSaveButtonClick}
+                className="text-xs bg-primary hover:bg-primary-hover text-white px-2 py-1 rounded"
+                disabled={username.trim().length === 0 || username === currentUsername}
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </form>
       ) : (
-        <div className="flex items-center group">
+        <div className="flex items-center group overflow-hidden overflow-ellipsis">
           <span 
-            className="cursor-pointer hover:underline"
+            className="cursor-pointer hover:underline truncate max-w-[300px]"
             onClick={() => setIsEditing(true)}
+            title={currentUsername}
           >
             {currentUsername}
           </span>
-          <span 
-            className="ml-1 text-xs text-muted-foreground cursor-pointer"
-            onClick={() => setIsEditing(true)}
-          >
-            (You)
-          </span>
+          {showYouIndicator && (
+            <span 
+              className="ml-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+              onClick={() => setIsEditing(true)}
+            >
+              (You)
+            </span>
+          )}
           <div 
-            className="ml-1 cursor-pointer"
+            className="ml-1 cursor-pointer flex-shrink-0"
             onClick={() => setIsEditing(true)}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-muted-foreground group-hover:text-foreground hover:text-foreground transition-colors">
               <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
-              <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+              <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25-1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
             </svg>
           </div>
         </div>
