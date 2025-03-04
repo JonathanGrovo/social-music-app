@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import UsernameEditor from './UsernameEditor';
 import AvatarSelector from './AvatarSelector';
 import { UserInfo } from '../types';
@@ -70,18 +70,34 @@ export default function RoomInfo({
       
       <div className="mb-4">
         <div className="flex justify-between items-center mb-1">
-          <p className="text-sm text-muted-foreground">Share this link:</p>
+          <div className="flex items-center">
+            {/* User-plus share icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="8.5" cy="7" r="4"></circle>
+              <line x1="20" y1="8" x2="20" y2="14"></line>
+              <line x1="23" y1="11" x2="17" y2="11"></line>
+            </svg>
+            <p className="text-sm text-muted-foreground">Share this link:</p>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <p className="font-mono text-xs bg-muted p-2 rounded-l text-foreground truncate flex-1">
+            {roomUrl}
+          </p>
           <button 
             onClick={copyRoomLink}
-            className="text-xs bg-muted hover:bg-accent text-foreground px-2 py-1 rounded"
-            type="button"
+            className="flex items-center bg-muted hover:bg-accent text-foreground px-2 py-2 rounded-r border-l border-border"
+            title="Copy to clipboard"
           >
-            {copied ? 'Copied!' : 'Copy'}
+            {/* Clipboard icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+            <span className="text-xs">{copied ? 'Copied!' : 'Copy'}</span>
           </button>
         </div>
-        <p className="font-mono text-xs bg-muted p-2 rounded text-foreground truncate">
-          {roomUrl}
-        </p>
       </div>
       
       {/* Your profile section */}
@@ -149,7 +165,7 @@ export default function RoomInfo({
                   />
                 </div>
                 {/* Status indicator dot at bottom right */}
-                <span className="h-3 w-3 rounded-full bg-secondary absolute bottom-0 right-0 border border-card"></span>
+                <span className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip" title="Active"></span>
               </div>
               
               {/* Username - show just the username with (You) indicator for current user */}
@@ -161,7 +177,11 @@ export default function RoomInfo({
                   
                   {/* Room owner crown if applicable - right after username */}
                   {user.isRoomOwner && (
-                    <span className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center" style={{ position: 'relative', top: '3px' }} title="Room Owner">
+                    <span 
+                      className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center crown-tooltip" 
+                      style={{ position: 'relative', top: '3px' }} 
+                      title="Room Owner"
+                    >
                       <SimpleCrown className="inline-block" />
                     </span>
                   )}

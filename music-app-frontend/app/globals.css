@@ -174,3 +174,10 @@ body, * {
 .markdown-content h4, .markdown-content h5, .markdown-content h6 {
   font-size: 1.1rem;
 }
+
+/* Add these styles to your globals.css file */
+
+/* Add to globals.css if you want a "help" cursor on hover */
+.title-tooltip {
+  cursor: help;
+}
