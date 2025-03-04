@@ -7,7 +7,21 @@ import { useEffect } from 'react';
 export const useTooltipFix = () => {
   useEffect(() => {
     // Simple function to hide all tooltips
-    const hideAllTooltips = () => {
+    const hideAllTooltips = (e: Event) => {
+      // Check if the click was on a tooltip trigger
+      if (e.type === 'click') {
+        const clickEvent = e as MouseEvent;
+        const target = clickEvent.target as HTMLElement;
+        
+        // If we clicked on a tooltip trigger, don't hide the tooltip
+        if (target && (
+          target.hasAttribute('data-tooltip-id') || 
+          target.closest('[data-tooltip-id]')
+        )) {
+          return;
+        }
+      }
+      
       // Get all tooltip elements
       const tooltips = document.querySelectorAll('.react-tooltip');
       if (tooltips.length > 0) {

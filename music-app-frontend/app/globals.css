@@ -189,11 +189,26 @@ body, * {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   max-width: 120px !important; /* Limit the width */
   text-align: center !important;
-  animation: fadeInOut 5s ease-in-out;
+  animation: fadeIn 0.1s ease-in-out;
   transition: opacity 0.1s ease-out, visibility 0s !important;
 }
 
-@keyframes fadeInOut {
+/* Add a specific cursor for the tooltip triggers */
+.status-tooltip-trigger {
+  cursor: inherit;
+  -webkit-tap-highlight-color: transparent; /* Removes highlight on mobile tap */
+  user-select: none; /* Prevents text selection */
+  outline: none !important; /* Removes outline on focus/click */
+}
+
+/* Prevent default focus styling for tooltip triggers */
+.status-tooltip-trigger:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Simple fade in animation */
+@keyframes fadeIn {
   0% { opacity: 0; }
   100% { opacity: 1; }
 }

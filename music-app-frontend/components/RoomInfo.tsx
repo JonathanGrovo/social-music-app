@@ -173,9 +173,11 @@ export default function RoomInfo({
                 </div>
                 {/* Status indicator dot at bottom right */}
                 <span 
-                  className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip-trigger" 
+                  className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip-trigger outline-none" 
                   data-tooltip-id={`status-tooltip-${index}`}
                   data-tooltip-place="top"
+                  tabIndex={-1}
+                  onClick={(e) => e.stopPropagation()}
                 ></span>
                 <Tooltip 
                   id={`status-tooltip-${index}`} 
