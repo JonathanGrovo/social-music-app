@@ -24,6 +24,12 @@
   --message-other-text: #171717;
   --header-background: #3b82f6; /* blue-500 */
   --header-text: #ffffff;
+
+  --rt-color-dark: var(--card-background);
+  --rt-color-white: var(--foreground);
+  --rt-opacity: 0.95; /* Slight transparency for fade effect */
+  --rt-transition-show-delay: 0.05s; /* Even faster appearance */
+  --rt-transition-closing-delay: 0.05s; /* Even faster disappearance */
 }
 
 .dark {
@@ -175,9 +181,19 @@ body, * {
   font-size: 1.1rem;
 }
 
-/* Add these styles to your globals.css file */
+/* Status indicator and room owner tooltips */
+.status-tooltip {
+  font-size: 0.75rem !important; /* Smaller text */
+  padding: 6px 8px !important; /* Smaller padding */
+  opacity: 1 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  max-width: 120px !important; /* Limit the width */
+  text-align: center !important;
+  animation: fadeInOut 5s ease-in-out;
+  transition: opacity 0.1s ease-out, visibility 0s !important;
+}
 
-/* Add to globals.css if you want a "help" cursor on hover */
-.title-tooltip {
-  cursor: help;
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }

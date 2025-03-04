@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { Tooltip } from 'react-tooltip';
 import UsernameEditor from './UsernameEditor';
 import AvatarSelector from './AvatarSelector';
 import { UserInfo } from '../types';
+import useTooltipFix from '../hooks/useTooltipFix';
 
 // Simple crown SVG component with slimmer bottom half
 function SimpleCrown({ className = "" }: { className?: string }) {
@@ -15,6 +17,8 @@ function SimpleCrown({ className = "" }: { className?: string }) {
       height="18" 
       fill="currentColor" 
       className={className}
+      data-tooltip-id="room-owner-tooltip"
+      data-tooltip-place="top"
     >
       {/* Modified path to make the bottom half slimmer */}
       <path d="M12 1L8 5L4 3L6 9L6 12H18L18 9L20 3L16 5L12 1Z" />
@@ -44,6 +48,9 @@ export default function RoomInfo({
   const [copied, setCopied] = useState(false);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const userListRef = useRef<HTMLUListElement>(null);
+  
+  // Use our custom tooltip fix hook
+  useTooltipFix();
   
   // Generate room URL
   const roomUrl = typeof window !== 'undefined' 
@@ -88,7 +95,6 @@ export default function RoomInfo({
           <button 
             onClick={copyRoomLink}
             className="flex items-center bg-muted hover:bg-accent text-foreground px-2 py-2 rounded-r border-l border-border"
-            title="Copy to clipboard"
           >
             {/* Clipboard icon */}
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -97,6 +103,7 @@ export default function RoomInfo({
             </svg>
             <span className="text-xs">{copied ? 'Copied!' : 'Copy'}</span>
           </button>
+
         </div>
       </div>
       
@@ -119,11 +126,11 @@ export default function RoomInfo({
             <button 
               className="absolute bottom-0 right-0 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
               onClick={() => setEditingAvatar(true)}
-              title="Change avatar"
             >
               ✎
             </button>
           </div>
+
           
           {/* Username editor - without (You) in profile section */}
           <div className="min-w-0 flex-1">
@@ -150,7 +157,7 @@ export default function RoomInfo({
       <div>
         <p className="text-sm text-muted-foreground mb-2">Users in Room ({users.length}):</p>
         <ul ref={userListRef} className="space-y-1 max-h-[200px] overflow-y-auto pr-2">
-          {Array.isArray(users) && users.map((user) => (
+          {Array.isArray(users) && users.map((user, index) => (
             <li 
               key={`user-${user.clientId}`} 
               className="flex items-center text-foreground py-1"
@@ -165,7 +172,19 @@ export default function RoomInfo({
                   />
                 </div>
                 {/* Status indicator dot at bottom right */}
-                <span className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip" title="Active"></span>
+                <span 
+                  className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip-trigger" 
+                  data-tooltip-id={`status-tooltip-${index}`}
+                  data-tooltip-place="top"
+                ></span>
+                <Tooltip 
+                  id={`status-tooltip-${index}`} 
+                  content="Active" 
+                  place="top" 
+                  positionStrategy="fixed"
+                  offset={5}
+                  className="status-tooltip"
+                />
               </div>
               
               {/* Username - show just the username with (You) indicator for current user */}
@@ -178,9 +197,9 @@ export default function RoomInfo({
                   {/* Room owner crown if applicable - right after username */}
                   {user.isRoomOwner && (
                     <span 
-                      className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center crown-tooltip" 
+                      className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center status-tooltip-trigger" 
                       style={{ position: 'relative', top: '3px' }} 
-                      title="Room Owner"
+                      data-tooltip-id="room-owner-tooltip"
                     >
                       <SimpleCrown className="inline-block" />
                     </span>
@@ -195,6 +214,17 @@ export default function RoomInfo({
           ))}
         </ul>
       </div>
+      
+      {/* Define tooltips once, outside the loop */}
+      <Tooltip 
+        id="room-owner-tooltip" 
+        content="Room Owner" 
+        place="top" 
+        positionStrategy="fixed"
+        offset={5}
+        className="status-tooltip"
+      />
+      
     </div>
   );
 }
