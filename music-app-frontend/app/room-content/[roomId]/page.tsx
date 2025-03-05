@@ -7,13 +7,16 @@ import ChatBox from '../../../components/ChatBox';
 import PlayerControls from '../../../components/PlayerControls';
 import Queue from '../../../components/Queue';
 import RoomInfo from '../../../components/RoomInfo';
+import UsernameEditor from '../../../components/UsernameEditor';
+import { Tooltip } from 'react-tooltip';
+import useTooltipFix from '../../../hooks/useTooltipFix';
 
 export default function RoomContentPage() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.roomId as string;
   
-  // Get stored user info - renamed userId to username
+  // Get stored user info
   const [username, setUsername] = useState<string>('');
   const [clientId, setClientId] = useState<string>('');
   const [avatarId, setAvatarId] = useState<string>('avatar1');
@@ -33,9 +36,10 @@ export default function RoomContentPage() {
   });
   
   // Initialize on mount
+  // Add initialization effect back while still including scrollbar styling
   useEffect(() => {
     // Get username and clientId from localStorage
-    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId'); // Support both new and old keys
+    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId');
     const storedClientId = localStorage.getItem('clientId');
     const storedAvatarId = localStorage.getItem('avatarId') || 'avatar1';
     
@@ -90,6 +94,40 @@ export default function RoomContentPage() {
     };
     
     fetchRoomDetails();
+    
+    // Add custom scrollbar styling to the document
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      /* Customize scrollbars for a more subtle appearance */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #4a4d53;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #5d6067;
+      }
+      
+      /* Firefox scrollbar styling */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #4a4d53 transparent;
+      }
+    `;
+    document.head.appendChild(styleElement);
+    
+    // Cleanup function to remove style when component unmounts
+    return () => {
+      if (styleElement.parentNode) {
+        document.head.removeChild(styleElement);
+      }
+    };
   }, [roomId]);
   
   // Initialize socket with roomId, username, and clientId
@@ -105,6 +143,14 @@ export default function RoomContentPage() {
     disconnect,
     reconnect
   } = useSocket(roomId, username, clientId, avatarId);
+
+  // Update room name from socket roomState if available
+  useEffect(() => {
+    if (roomState && roomState.roomName && roomState.roomName !== roomName) {
+      console.log(`Updating room name from socket: ${roomState.roomName}`);
+      setRoomName(roomState.roomName);
+    }
+  }, [roomState, roomName]);
   
   // Update the playback state reference whenever roomState changes
   useEffect(() => {
@@ -115,6 +161,14 @@ export default function RoomContentPage() {
       playbackStateRef.current.queue = [...roomState.queue];
     }
   }, [roomState]);
+  
+  // Use tooltip fix hook
+  useTooltipFix();
+  
+  // State for showing "Copied" text
+  const [copied, setCopied] = useState(false);
+  // State for editing avatar
+  const [editingAvatar, setEditingAvatar] = useState(false);
   
   // Handle username change
   const handleUsernameChange = (newUsername: string) => {
@@ -159,6 +213,17 @@ export default function RoomContentPage() {
     }
   };
   
+  const roomUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/room/${roomId}` 
+    : '';
+    
+  const copyRoomLink = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigator.clipboard.writeText(roomUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -188,58 +253,250 @@ export default function RoomContentPage() {
   }
   
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto">
-        <header className="bg-headerBackground text-headerText p-4 rounded-lg mb-6 flex justify-between items-center">
-          <h1 className="text-xl font-bold">
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Left Sidebar - Room Info */}
+      <div className="w-64 bg-card border-r border-border flex flex-col">
+        <div className="p-4 border-b border-border">
+          <h1 className="text-xl font-bold truncate text-foreground">
             {roomName ? roomName : 'Social Music Room'}
           </h1>
-          <div className="text-sm">
+          <div className="text-sm mt-1">
             {connected ? (
-              <span className="inline-flex items-center">
+              <span className="inline-flex items-center text-muted-foreground">
                 <span className="h-2 w-2 rounded-full bg-secondary mr-2"></span>
                 Connected
               </span>
             ) : (
-              <span className="inline-flex items-center">
+              <span className="inline-flex items-center text-red-500">
                 <span className="h-2 w-2 rounded-full bg-red-500 mr-2"></span>
                 Disconnected
               </span>
             )}
           </div>
-        </header>
+        </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <PlayerControls
-              currentTrack={roomState.currentTrack}
-              queue={roomState.queue}
-              onPlaybackUpdate={updatePlayback}
-              onUpdateQueue={updateQueue}
-            />
-            <Queue
-              queue={roomState.queue}
-              onUpdateQueue={updateQueue}
-            />
+        <div className="p-4 border-b border-border">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7" r="4"></circle>
+                <line x1="20" y1="8" x2="20" y2="14"></line>
+                <line x1="23" y1="11" x2="17" y2="11"></line>
+              </svg>
+              <p className="text-sm text-muted-foreground">Share this link:</p>
+            </div>
+          </div>
+          <div className="flex items-center">
+            <p className="font-mono text-xs bg-muted p-2 rounded-l text-foreground truncate flex-1">
+              {roomUrl}
+            </p>
+            <button 
+              onClick={copyRoomLink}
+              className="flex items-center bg-muted hover:bg-accent text-foreground px-2 py-2 rounded-r border-l border-border"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <span className="text-xs">{copied ? 'Copied!' : 'Copy'}</span>
+            </button>
+          </div>
+        </div>
+        
+        {/* Profile Section */}
+        <div className="p-4 border-b border-border">
+          <h3 className="text-sm font-semibold mb-2 text-foreground">Your Profile</h3>
+          <div className="flex items-center">
+            <div className="relative mr-3 flex-shrink-0">
+              <div 
+                className="w-12 h-12 rounded-full overflow-hidden cursor-pointer border-2 border-primary"
+                onClick={() => setEditingAvatar(true)}
+              >
+                <img 
+                  src={`/avatars/${avatarId}.png`} 
+                  alt="Your Avatar" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <button 
+                className="absolute bottom-0 right-0 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                onClick={() => setEditingAvatar(true)}
+              >
+                ✎
+              </button>
+            </div>
+            
+            <div className="min-w-0 flex-1">
+              <UsernameEditor 
+                currentUsername={username} 
+                onUsernameChange={handleUsernameChange}
+                showYouIndicator={false}
+              />
+            </div>
           </div>
           
-          <div className="space-y-6">
-            <RoomInfo
-              roomId={roomId}
-              users={roomState.users}
-              currentUsername={username}
-              currentClientId={clientId}
-              currentAvatarId={avatarId}
-              onUsernameChange={handleUsernameChange}
-              onAvatarChange={handleAvatarChange}
-            />
+          {/* Avatar selector dialog */}
+          {editingAvatar && (
+            <div className="mt-3">
+              <div className="bg-accent rounded-lg p-3">
+                <h4 className="text-sm font-semibold mb-2 text-foreground">Select Avatar</h4>
+                
+                <div className="grid grid-cols-5 gap-2 mb-3">
+                  {['avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 
+                    'avatar6', 'avatar7', 'avatar8', 'avatar9', 'avatar10'].map((avId) => (
+                    <div 
+                      key={avId}
+                      className={`
+                        w-10 h-10 rounded-full overflow-hidden cursor-pointer
+                        ${avId === avatarId ? 'ring-2 ring-primary' : 'ring-1 ring-muted hover:ring-secondary'}
+                        transition-all
+                      `}
+                      onClick={() => {
+                        setAvatarId(avId);
+                        if (handleAvatarChange) handleAvatarChange(avId);
+                      }}
+                    >
+                      <img 
+                        src={`/avatars/${avId}.png`} 
+                        alt={`Avatar ${avId}`} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => setEditingAvatar(false)}
+                    className="px-3 py-1 text-sm bg-muted hover:bg-accent-foreground/10 text-foreground rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setEditingAvatar(false)}
+                    className="px-3 py-1 text-sm bg-primary hover:bg-primary-hover text-white rounded"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Users List */}
+        <div className="flex-1 p-4 overflow-y-auto">
+          <p className="text-sm text-muted-foreground mb-2">Users in Room ({roomState.users.length}):</p>
+          <ul className="space-y-1">
+            {Array.isArray(roomState.users) && roomState.users.map((user, index) => (
+              <li 
+                key={`user-${user.clientId}`} 
+                className="flex items-center text-foreground py-1"
+              >
+                <div className="relative mr-3 flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
+                    <img 
+                      src={`/avatars/${user.avatarId || 'avatar1'}.png`} 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span 
+                    className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip-trigger outline-none" 
+                    data-tooltip-id={`status-tooltip-${index}`}
+                    data-tooltip-place="top"
+                    tabIndex={-1}
+                  ></span>
+                  <Tooltip 
+                    id={`status-tooltip-${index}`} 
+                    content="Active" 
+                    place="top" 
+                    positionStrategy="fixed"
+                    offset={5}
+                    className="status-tooltip"
+                  />
+                </div>
+                
+                <div className="truncate min-w-0 flex-1 flex items-center py-0.5">
+                  <div className="flex flex-grow truncate min-w-0 items-center">
+                    <span className="truncate max-w-[120px] inline-block leading-none text-foreground" title={user.username}>
+                      {user.username}
+                    </span>
+                    
+                    {user.isRoomOwner && (
+                      <span 
+                        className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center status-tooltip-trigger" 
+                        style={{ position: 'relative', top: '1px' }}
+                        data-tooltip-id="room-owner-tooltip"
+                      >
+                        👑
+                      </span>
+                    )}
+                    
+                    {user.clientId === clientId && 
+                      <span className="ml-1 text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">(You)</span>
+                    }
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          
+          <Tooltip 
+            id="room-owner-tooltip" 
+            content="Room Owner" 
+            place="top" 
+            positionStrategy="fixed"
+            offset={5}
+            className="status-tooltip"
+          />
+        </div>
+        
+        {/* Audio Controls Placeholder for future implementation */}
+        <div className="p-4 border-t border-border">
+          <h3 className="text-sm font-semibold mb-2 text-foreground">Audio Controls</h3>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Volume</span>
+            <input type="range" className="w-32" />
+          </div>
+        </div>
+      </div>
+      
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Player Controls taking most space */}
+        <div className="flex-grow" style={{ minHeight: "60vh" }}>
+          <PlayerControls
+            currentTrack={roomState.currentTrack}
+            queue={roomState.queue}
+            onPlaybackUpdate={updatePlayback}
+            onUpdateQueue={updateQueue}
+          />
+        </div>
+        
+        {/* Queue at bottom */}
+        <div className="flex-none">
+          <Queue
+            queue={roomState.queue}
+            onUpdateQueue={updateQueue}
+          />
+        </div>
+      </div>
+      
+      {/* Right Sidebar - Chat */}
+      <div className="w-80 bg-card border-l border-border h-screen flex flex-col overflow-hidden">
+        {/* Style the container to take full height, no padding to avoid gaps */}
+        <div className="h-full flex flex-col"> 
+          {/* Apply styles to container instead of directly to ChatBox */}
+          <div className="flex-1 flex flex-col h-full">
             <ChatBox
               messages={roomState.chatHistory}
               onSendMessage={sendChatMessage}
               username={username}
               clientId={clientId}
               avatarId={avatarId}
-              roomName={roomName || 'the room'} // Pass room name to ChatBox
+              roomName={roomName || 'the room'}
             />
           </div>
         </div>

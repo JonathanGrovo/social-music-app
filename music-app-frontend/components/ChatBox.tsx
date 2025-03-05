@@ -1,10 +1,12 @@
-// components/ChatBox.tsx with properly typed markdown components
+// components/ChatBox.tsx with performance optimizations
+
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'; // Add useMemo and useCallback
 import { ChatMessage } from '../types';
 import { formatMessageTime } from '../utils/formatMessageTime';
 import ReactMarkdown from 'react-markdown';
+import debounce from 'lodash/debounce'; // Add lodash debounce (install if needed)
 
 interface ChatBoxProps {
   messages: ChatMessage[];
@@ -47,45 +49,49 @@ export default function ChatBox({
   const [autoScroll, setAutoScroll] = useState(true);
   const prevMessagesLengthRef = useRef(messages.length);
   
-  // Group messages by author and time
-  const groupedMessages = messages.reduce((groups: MessageGroup[], msg) => {
-    const isCurrentUser = msg.clientId === clientId;
-    const msgId = `${msg.clientId}-${msg.timestamp}`;
-    
-    // Try to add to the last group if from same author and within time threshold
-    const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
-    
-    if (
-      lastGroup && 
-      lastGroup.authorClientId === msg.clientId &&
-      msg.timestamp - lastGroup.messages[lastGroup.messages.length - 1].timestamp < MESSAGE_GROUPING_THRESHOLD
-    ) {
-      // Add to existing group
-      lastGroup.messages.push({
-        content: msg.content,
-        timestamp: msg.timestamp,
-        id: msgId
-      });
-    } else {
-      // Create new group
-      groups.push({
-        authorClientId: msg.clientId,
-        authorUsername: msg.username,
-        authorAvatarId: msg.avatarId || 'avatar1',
-        isCurrentUser,
-        timestamp: msg.timestamp,
-        messages: [{
+  // OPTIMIZATION 1: Memoize the message grouping logic
+  // This prevents recalculating groups on every render
+  const groupedMessages = useMemo(() => {
+    console.log("Recalculating message groups");
+    return messages.reduce((groups: MessageGroup[], msg) => {
+      const isCurrentUser = msg.clientId === clientId;
+      const msgId = `${msg.clientId}-${msg.timestamp}`;
+      
+      // Try to add to the last group if from same author and within time threshold
+      const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+      
+      if (
+        lastGroup && 
+        lastGroup.authorClientId === msg.clientId &&
+        msg.timestamp - lastGroup.messages[lastGroup.messages.length - 1].timestamp < MESSAGE_GROUPING_THRESHOLD
+      ) {
+        // Add to existing group
+        lastGroup.messages.push({
           content: msg.content,
           timestamp: msg.timestamp,
           id: msgId
-        }]
-      });
-    }
-    
-    return groups;
-  }, []);
+        });
+      } else {
+        // Create new group
+        groups.push({
+          authorClientId: msg.clientId,
+          authorUsername: msg.username,
+          authorAvatarId: msg.avatarId || 'avatar1',
+          isCurrentUser,
+          timestamp: msg.timestamp,
+          messages: [{
+            content: msg.content,
+            timestamp: msg.timestamp,
+            id: msgId
+          }]
+        });
+      }
+      
+      return groups;
+    }, []);
+  }, [messages, clientId]); // Only recalculate when messages or clientId changes
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (message.trim()) {
       onSendMessage(message);
       setMessage('');
@@ -95,10 +101,10 @@ export default function ChatBox({
         textareaRef.current.style.height = 'auto';
       }
     }
-  };
+  }, [message, onSendMessage]);
 
   // Handle key presses with Shift+Enter support
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (e.shiftKey) {
         // Shift+Enter: add a new line
@@ -109,35 +115,47 @@ export default function ChatBox({
         handleSend();
       }
     }
-  };
+  }, [handleSend]);
 
-  // Auto-resize textarea as content grows
-  const adjustTextareaHeight = () => {
-    if (textareaRef.current) {
-      // Reset height temporarily to get the correct scrollHeight
-      textareaRef.current.style.height = 'auto';
-      
-      // Set to scrollHeight to match content
-      const scrollHeight = textareaRef.current.scrollHeight;
-      
-      // Apply max height if needed
-      if (scrollHeight <= 200) { // Max height before scrolling
-        textareaRef.current.style.height = scrollHeight + 'px';
-      } else {
-        textareaRef.current.style.height = '200px';
+  // OPTIMIZATION 2: Debounce the textarea height adjustment
+  // Create a debounced function that will adjust height less frequently
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedAdjustHeight = useCallback(
+    debounce(() => {
+      if (textareaRef.current) {
+        // Reset height temporarily to get the correct scrollHeight
+        textareaRef.current.style.height = 'auto';
+        
+        // Set to scrollHeight to match content
+        const scrollHeight = textareaRef.current.scrollHeight;
+        
+        // Apply max height if needed
+        if (scrollHeight <= 200) { // Max height before scrolling
+          textareaRef.current.style.height = scrollHeight + 'px';
+        } else {
+          textareaRef.current.style.height = '200px';
+        }
       }
-    }
-  };
+    }, 10), // 10ms delay is barely noticeable but reduces calculations
+    []
+  );
 
   // Update textarea height when input changes
   useEffect(() => {
-    adjustTextareaHeight();
-  }, [message]);
+    debouncedAdjustHeight();
+    // Clean up the debounced function when component unmounts
+    return () => {
+      debouncedAdjustHeight.cancel();
+    };
+  }, [message, debouncedAdjustHeight]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (autoScroll && messagesEndRef.current && messages.length > prevMessagesLengthRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
     }
     
     prevMessagesLengthRef.current = messages.length;
@@ -148,29 +166,64 @@ export default function ChatBox({
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    const handleScroll = () => {
+    // Debounce scroll handler to improve performance
+    const handleScroll = debounce(() => {
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
       if (autoScroll !== isNearBottom) {
         setAutoScroll(isNearBottom);
       }
-    };
+    }, 100);
     
     container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      handleScroll.cancel();
+    };
   }, [autoScroll]);
 
+  // Add custom scrollbar styling
+  useEffect(() => {
+    // Add custom scrollbar styling specifically for this component
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      /* Target scrollbar in ChatBox messages container */
+      .chat-messages-container::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .chat-messages-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .chat-messages-container::-webkit-scrollbar-thumb {
+        background: #4a4d53;
+        border-radius: 4px;
+      }
+      .chat-messages-container::-webkit-scrollbar-thumb:hover {
+        background: #5d6067;
+      }
+    `;
+    document.head.appendChild(styleElement);
+    
+    // Cleanup function
+    return () => {
+      if (styleElement.parentNode) {
+        document.head.removeChild(styleElement);
+      }
+    };
+  }, []);
+
   // Format time only (HH:MM AM/PM)
-  const formatTimeOnly = (timestamp: number): string => {
+  const formatTimeOnly = useCallback((timestamp: number): string => {
     const date = new Date(timestamp);
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     }).format(date);
-  };
+  }, []);
   
   // Format date for message groups
-  const formatMessageDate = (timestamp: number): string => {
+  const formatMessageDate = useCallback((timestamp: number): string => {
     const messageDate = new Date(timestamp);
     const now = new Date();
     
@@ -192,11 +245,10 @@ export default function ChatBox({
       day: 'numeric',
       year: 'numeric'
     }) + ' at ' + formatTimeOnly(timestamp);
-  };
+  }, [formatTimeOnly]);
   
-  // Simpler implementation to avoid TypeScript issues
-  const renderWithMarkdown = (content: string) => {
-    // Simple implementation to handle basic markdown without custom components
+  // OPTIMIZATION 3: Memoize markdown rendering
+  const renderWithMarkdown = useCallback((content: string) => {
     return (
       <div className="markdown-content">
         <ReactMarkdown>
@@ -204,19 +256,29 @@ export default function ChatBox({
         </ReactMarkdown>
       </div>
     );
-  };
+  }, []);
 
   return (
-    <div className="flex flex-col h-[400px] bg-card rounded-lg shadow-md overflow-hidden border border-border">
+    <div className="flex flex-col bg-card rounded-lg shadow-md overflow-hidden border border-border">
       <div className="bg-muted py-3 px-4 border-b border-border">
         <h2 className="font-semibold text-foreground">Chat</h2>
       </div>
       
       <div 
         ref={messagesContainerRef}
-        className="overflow-y-auto flex-1 p-4 space-y-6"
-        style={{ overflowAnchor: 'auto' }}
+        className="chat-messages-container overflow-y-auto flex-1 p-4 space-y-6"
+        style={{ 
+          overflowAnchor: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#4a4d53 transparent'
+        }}
       >
+        {groupedMessages.length === 0 && (
+          <div className="text-center text-muted-foreground py-4">
+            No messages yet. Start the conversation!
+          </div>
+        )}
+        
         {groupedMessages.map((group) => (
           <div
             key={`group-${group.authorClientId}-${group.timestamp}`}
@@ -295,15 +357,6 @@ export default function ChatBox({
       {/* Discord-style chat input with textarea for multiline support */}
       <div className="px-4 pb-4">
         <div className="flex items-start bg-[#383a40] dark:bg-[#40444b] rounded-lg overflow-hidden">
-          {/* Upload/attachment button */}
-          <button className="text-muted-foreground hover:text-foreground p-2 ml-2 mt-1 flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-          </button>
-          
           {/* Message textarea with auto-resize */}
           <textarea
             ref={textareaRef}
@@ -311,7 +364,7 @@ export default function ChatBox({
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none min-h-[40px] max-h-[200px] overflow-y-auto"
-            placeholder={`Message ${roomName}`}
+            placeholder={`Message ${roomName?.length > 15 ? roomName.substring(0, 15) + '...' : roomName}`}
             rows={1}
             style={{ height: 'auto' }}
           />
