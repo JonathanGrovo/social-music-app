@@ -34,7 +34,7 @@
 
 .dark {
   /* Dark theme (Discord/Claude-like) */
-  --background: #313338; /* Discord dark bg */
+  --background: #4264a7; /* Discord dark bg */
   --foreground: #e9eaec; /* Light text for dark mode */
   --card-background: #2b2d31; /* Discord channel list bg */
   --primary: #5865f2; /* Discord Blurple */
@@ -208,10 +208,12 @@ body, * {
 }
 
 /* Simple fade in animation */
-@keyframes fadeIn {
+/* @keyframes fadeIn {
   0% { opacity: 0; }
   100% { opacity: 1; }
-}
+} */
+
+/* SCROLLBAR STYLING */
 
 /* Custom scrollbar styling for the entire app */
 ::-webkit-scrollbar {
@@ -236,4 +238,22 @@ body, * {
 * {
   scrollbar-width: thin;
   scrollbar-color: #4a4d53 transparent;
+}
+
+
+
+/* Animation for fade in effect */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px) translateX(-50%); }
+  to { opacity: 1; transform: translateY(0) translateX(-50%); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Make sure the messages container has proper anchoring */
+.chat-messages-container {
+  scroll-padding-bottom: 8px;
+  scroll-behavior: smooth;
 }

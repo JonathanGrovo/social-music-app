@@ -32,6 +32,8 @@ export default function UsernameEditor({
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
+      // Select all text for easy replacement
+      inputRef.current.select();
     }
   }, [isEditing]);
   
@@ -126,7 +128,10 @@ export default function UsernameEditor({
             type="text"
             value={username}
             onChange={(e) => {
-              setUsername(e.target.value);
+              // Limit to max length
+              if (e.target.value.length <= USERNAME_MAX_LENGTH) {
+                setUsername(e.target.value);
+              }
             }}
             className={`px-2 py-1 text-sm border rounded bg-input text-foreground border-border w-full ${
               isAtLimit ? 'border-red-500' : ''
@@ -151,8 +156,7 @@ export default function UsernameEditor({
               </button>
               <button 
                 ref={saveButtonRef}
-                type="button"
-                onClick={handleSaveButtonClick}
+                type="submit"
                 className="text-xs bg-primary hover:bg-primary-hover text-white px-2 py-1 rounded"
                 disabled={username.trim().length === 0 || username === currentUsername}
               >
@@ -172,7 +176,7 @@ export default function UsernameEditor({
           </span>
           {showYouIndicator && (
             <span 
-              className="ml-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
+              className="ml-1 text-xs text-muted-foreground font-normal whitespace-nowrap"
               onClick={() => setIsEditing(true)}
             >
               (You)

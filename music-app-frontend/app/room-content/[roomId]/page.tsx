@@ -1,3 +1,4 @@
+// Updated room-content/[roomId]/page.tsx
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -6,10 +7,8 @@ import { useSocket } from '../../../hooks/useSocket';
 import ChatBox from '../../../components/ChatBox';
 import PlayerControls from '../../../components/PlayerControls';
 import Queue from '../../../components/Queue';
-import RoomInfo from '../../../components/RoomInfo';
-import UsernameEditor from '../../../components/UsernameEditor';
-import { Tooltip } from 'react-tooltip';
-import useTooltipFix from '../../../hooks/useTooltipFix';
+import Sidebar from '../../../components/Sidebar';
+import { QueueItem } from '../../../types';
 
 export default function RoomContentPage() {
   const params = useParams();
@@ -22,10 +21,22 @@ export default function RoomContentPage() {
   const [avatarId, setAvatarId] = useState<string>('avatar1');
   const [roomName, setRoomName] = useState<string>('');
   
+  // Add state for video URL input
+  const [videoUrl, setVideoUrl] = useState('');
+  const [error, setError] = useState('');
+  
+  // Add state for tab navigation
+  const [activeTab, setActiveTab] = useState('chat'); // Options: 'chat', 'queue', 'history'
+  
   // Connection states
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   
+  // Responsive layout state
+  const [windowWidth, setWindowWidth] = useState(0); 
+  const [windowHeight, setWindowHeight] = useState(0);
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
   // Playback state references to preserve across username changes
   const playbackStateRef = useRef<{
     currentTrack?: any;
@@ -36,8 +47,17 @@ export default function RoomContentPage() {
   });
   
   // Initialize on mount
-  // Add initialization effect back while still including scrollbar styling
   useEffect(() => {
+    // Update window dimensions 
+    const updateWindowDimensions = () => {
+      setWindowWidth(window.innerWidth);
+      setWindowHeight(window.innerHeight);
+    };
+
+    // Call once and add listener
+    updateWindowDimensions();
+    window.addEventListener('resize', updateWindowDimensions);
+    
     // Get username and clientId from localStorage
     const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId');
     const storedClientId = localStorage.getItem('clientId');
@@ -45,7 +65,7 @@ export default function RoomContentPage() {
     
     if (!storedUsername || !storedClientId) {
       console.error('Missing user info');
-      setError('Missing user information. Please return to the home page.');
+      setConnectionError('Missing user information. Please return to the home page.');
       return;
     }
     
@@ -60,17 +80,12 @@ export default function RoomContentPage() {
       setRoomName(lastRoomName);
     }
     
-    console.log(`Room content initialized: User ${storedUsername}, Client ${storedClientId}, Avatar ${storedAvatarId}`);
-    
     // Fetch room details to get the room name
     const fetchRoomDetails = async () => {
       try {
-        console.log(`Fetching room details for ${roomId}`);
         const response = await fetch(`http://localhost:3000/api/rooms/${roomId}`);
         if (response.ok) {
           const data = await response.json();
-          console.log('Room details:', data);
-          // Try multiple possible paths for room name
           let foundName = '';
           if (data.room && data.room.name) {
             foundName = data.room.name;
@@ -79,10 +94,7 @@ export default function RoomContentPage() {
           }
 
           if (foundName) {
-            console.log(`Setting room name to: ${foundName}`);
             setRoomName(foundName);
-          } else {
-            console.warn('Could not find room name in response:', data);
           }
         }
       } catch (error) {
@@ -95,38 +107,9 @@ export default function RoomContentPage() {
     
     fetchRoomDetails();
     
-    // Add custom scrollbar styling to the document
-    const styleElement = document.createElement('style');
-    styleElement.textContent = `
-      /* Customize scrollbars for a more subtle appearance */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #4a4d53;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #5d6067;
-      }
-      
-      /* Firefox scrollbar styling */
-      * {
-        scrollbar-width: thin;
-        scrollbar-color: #4a4d53 transparent;
-      }
-    `;
-    document.head.appendChild(styleElement);
-    
-    // Cleanup function to remove style when component unmounts
+    // Cleanup function
     return () => {
-      if (styleElement.parentNode) {
-        document.head.removeChild(styleElement);
-      }
+      window.removeEventListener('resize', updateWindowDimensions);
     };
   }, [roomId]);
   
@@ -147,7 +130,6 @@ export default function RoomContentPage() {
   // Update room name from socket roomState if available
   useEffect(() => {
     if (roomState && roomState.roomName && roomState.roomName !== roomName) {
-      console.log(`Updating room name from socket: ${roomState.roomName}`);
       setRoomName(roomState.roomName);
     }
   }, [roomState, roomName]);
@@ -161,23 +143,100 @@ export default function RoomContentPage() {
       playbackStateRef.current.queue = [...roomState.queue];
     }
   }, [roomState]);
+
+  // Also add a useEffect to handle tab switching and update scroll button visibility
+  useEffect(() => {
+    // When active tab changes to chat, make sure scroll position is checked
+    if (activeTab === 'chat') {
+      // Short delay to ensure DOM is updated
+      setTimeout(() => {
+        // Dispatch a scroll event to force recalculation of button visibility
+        const chatContainer = document.querySelector('.chat-messages-container');
+        if (chatContainer) {
+          chatContainer.dispatchEvent(new Event('scroll'));
+        }
+      }, 100);
+    }
+  }, [activeTab]);
   
-  // Use tooltip fix hook
-  useTooltipFix();
+  // Determine layout mode based on window dimensions
+  const isCompactMode = windowWidth < 768; // Below tablet breakpoint
+  const isWideMode = windowWidth >= 1200;
   
-  // State for showing "Copied" text
-  const [copied, setCopied] = useState(false);
-  // State for editing avatar
-  const [editingAvatar, setEditingAvatar] = useState(false);
+  // Queue management functions
+  const addToQueue = () => {
+    if (!videoUrl.trim()) {
+      setError('Please enter a valid YouTube URL');
+      return;
+    }
+
+    try {
+      // Extract YouTube video ID
+      let videoId = '';
+      
+      if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+        // YouTube
+        if (videoUrl.includes('youtube.com/watch')) {
+          const url = new URL(videoUrl);
+          videoId = url.searchParams.get('v') || '';
+        } else if (videoUrl.includes('youtu.be/')) {
+          videoId = videoUrl.split('youtu.be/')[1].split('?')[0];
+        } else if (videoUrl.includes('youtube.com/embed/')) {
+          videoId = videoUrl.split('youtube.com/embed/')[1].split('?')[0];
+        } else if (videoUrl.includes('youtube.com/shorts/')) {
+          videoId = videoUrl.split('youtube.com/shorts/')[1].split('?')[0];
+        }
+      } else {
+        // Try to treat input as a direct YouTube ID if it's 11 characters long
+        const directId = videoUrl.trim();
+        if (/^[a-zA-Z0-9_-]{11}$/.test(directId)) {
+          videoId = directId;
+        } else {
+          setError('Unsupported URL format. Please use a YouTube URL or video ID.');
+          return;
+        }
+      }
+
+      if (!videoId) {
+        setError('Could not extract YouTube video ID from URL');
+        return;
+      }
+
+      // Create new queue item
+      const newItem: QueueItem = {
+        id: videoId,
+        source: 'youtube',
+        title: `YouTube Video (${videoId})` // This will be updated with actual title when played
+      };
+
+      // Add to queue
+      const newQueue = [...roomState.queue, newItem];
+      updateQueue(newQueue);
+      
+      // If there is no current track playing, start playing the added video
+      if (!roomState.currentTrack && newQueue.length === 1) {
+        console.log('Starting playback of newly added video');
+        updatePlayback(0, true, videoId, 'youtube');
+      }
+      
+      setVideoUrl('');
+      setError('');
+    } catch (err) {
+      setError('Invalid URL format');
+    }
+  };
+
+  const removeFromQueue = (index: number) => {
+    const newQueue = [...roomState.queue];
+    newQueue.splice(index, 1);
+    updateQueue(newQueue);
+  };
   
   // Handle username change
   const handleUsernameChange = (newUsername: string) => {
     if (newUsername === username) {
-      console.log("Username unchanged, ignoring");
       return;
     }
-    
-    console.log(`Changing username from ${username} to ${newUsername}`);
     
     // Store the new username in localStorage - update both keys for compatibility
     localStorage.setItem('username', newUsername);
@@ -195,11 +254,8 @@ export default function RoomContentPage() {
   // Handle avatar change
   const handleAvatarChange = (newAvatarId: string) => {
     if (newAvatarId === avatarId) {
-      console.log("Avatar unchanged, ignoring");
       return;
     }
-    
-    console.log(`Changing avatar from ${avatarId} to ${newAvatarId}`);
     
     // Store the new avatar in localStorage
     localStorage.setItem('avatarId', newAvatarId);
@@ -213,17 +269,6 @@ export default function RoomContentPage() {
     }
   };
   
-  const roomUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/room/${roomId}` 
-    : '';
-    
-  const copyRoomLink = (e: React.MouseEvent) => {
-    e.preventDefault();
-    navigator.clipboard.writeText(roomUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -235,12 +280,12 @@ export default function RoomContentPage() {
     );
   }
   
-  if (error) {
+  if (connectionError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="bg-card p-8 rounded-lg shadow-md max-w-md w-full">
           <h1 className="text-xl font-semibold text-foreground mb-4">Error</h1>
-          <p className="text-muted-foreground mb-6">{error}</p>
+          <p className="text-muted-foreground mb-6">{connectionError}</p>
           <button
             onClick={() => router.push('/')}
             className="w-full bg-primary text-white py-2 rounded hover:bg-primary-hover"
@@ -255,218 +300,65 @@ export default function RoomContentPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Left Sidebar - Room Info */}
-      <div className="w-64 bg-card border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-bold truncate text-foreground">
-            {roomName ? roomName : 'Social Music Room'}
-          </h1>
-          <div className="text-sm mt-1">
+      {!isCompactMode && (
+        <Sidebar
+          roomId={roomId}
+          roomName={roomName}
+          connected={connected}
+          users={roomState.users}
+          currentUsername={username}
+          currentClientId={clientId}
+          currentAvatarId={avatarId}
+          onUsernameChange={handleUsernameChange}
+          onAvatarChange={handleAvatarChange}
+        />
+      )}
+      
+      {/* Main Content Area - with fixed height video player and always visible controls */}
+      <div className="flex-1 flex flex-col overflow-hidden main-content-column" ref={mainContentRef}>
+        {/* Queue entry above player */}
+        <div className="bg-card p-2 m-2 mb-0 rounded-lg">
+          <div className="flex mb-2 items-center text-xs">
             {connected ? (
-              <span className="inline-flex items-center text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-secondary mr-2"></span>
-                Connected
-              </span>
+              <span className="text-green-500">• Player connected and ready</span>
             ) : (
-              <span className="inline-flex items-center text-red-500">
-                <span className="h-2 w-2 rounded-full bg-red-500 mr-2"></span>
-                Disconnected
-              </span>
+              <span className="text-yellow-500">• Connecting to server...</span>
             )}
           </div>
-        </div>
-        
-        <div className="p-4 border-b border-border">
-          <div className="flex justify-between items-center mb-2">
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="4"></circle>
-                <line x1="20" y1="8" x2="20" y2="14"></line>
-                <line x1="23" y1="11" x2="17" y2="11"></line>
-              </svg>
-              <p className="text-sm text-muted-foreground">Share this link:</p>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <p className="font-mono text-xs bg-muted p-2 rounded-l text-foreground truncate flex-1">
-              {roomUrl}
-            </p>
-            <button 
-              onClick={copyRoomLink}
-              className="flex items-center bg-muted hover:bg-accent text-foreground px-2 py-2 rounded-r border-l border-border"
+          
+          {/* Queue entry form */}
+          <div className="flex">
+            <input
+              type="text"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="flex-1 border rounded-l px-3 py-2 bg-input text-foreground border-border focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="YouTube URL or video ID"
+            />
+            <button
+              onClick={addToQueue}
+              className="bg-secondary hover:bg-secondary-hover text-white px-4 py-2 rounded-r"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-              </svg>
-              <span className="text-xs">{copied ? 'Copied!' : 'Copy'}</span>
+              Add
             </button>
           </div>
-        </div>
-        
-        {/* Profile Section */}
-        <div className="p-4 border-b border-border">
-          <h3 className="text-sm font-semibold mb-2 text-foreground">Your Profile</h3>
-          <div className="flex items-center">
-            <div className="relative mr-3 flex-shrink-0">
-              <div 
-                className="w-12 h-12 rounded-full overflow-hidden cursor-pointer border-2 border-primary"
-                onClick={() => setEditingAvatar(true)}
-              >
-                <img 
-                  src={`/avatars/${avatarId}.png`} 
-                  alt="Your Avatar" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <button 
-                className="absolute bottom-0 right-0 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                onClick={() => setEditingAvatar(true)}
-              >
-                ✎
-              </button>
-            </div>
-            
-            <div className="min-w-0 flex-1">
-              <UsernameEditor 
-                currentUsername={username} 
-                onUsernameChange={handleUsernameChange}
-                showYouIndicator={false}
-              />
-            </div>
-          </div>
           
-          {/* Avatar selector dialog */}
-          {editingAvatar && (
-            <div className="mt-3">
-              <div className="bg-accent rounded-lg p-3">
-                <h4 className="text-sm font-semibold mb-2 text-foreground">Select Avatar</h4>
-                
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {['avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 
-                    'avatar6', 'avatar7', 'avatar8', 'avatar9', 'avatar10'].map((avId) => (
-                    <div 
-                      key={avId}
-                      className={`
-                        w-10 h-10 rounded-full overflow-hidden cursor-pointer
-                        ${avId === avatarId ? 'ring-2 ring-primary' : 'ring-1 ring-muted hover:ring-secondary'}
-                        transition-all
-                      `}
-                      onClick={() => {
-                        setAvatarId(avId);
-                        if (handleAvatarChange) handleAvatarChange(avId);
-                      }}
-                    >
-                      <img 
-                        src={`/avatars/${avId}.png`} 
-                        alt={`Avatar ${avId}`} 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <button
-                    onClick={() => setEditingAvatar(false)}
-                    className="px-3 py-1 text-sm bg-muted hover:bg-accent-foreground/10 text-foreground rounded"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => setEditingAvatar(false)}
-                    className="px-3 py-1 text-sm bg-primary hover:bg-primary-hover text-white rounded"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
+          {error && (
+            <div className="mt-2 p-2 bg-red-100 text-red-700 text-sm rounded">
+              {error}
             </div>
           )}
-        </div>
-        
-        {/* Users List */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          <p className="text-sm text-muted-foreground mb-2">Users in Room ({roomState.users.length}):</p>
-          <ul className="space-y-1">
-            {Array.isArray(roomState.users) && roomState.users.map((user, index) => (
-              <li 
-                key={`user-${user.clientId}`} 
-                className="flex items-center text-foreground py-1"
-              >
-                <div className="relative mr-3 flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full overflow-hidden">
-                    <img 
-                      src={`/avatars/${user.avatarId || 'avatar1'}.png`} 
-                      alt="Avatar" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span 
-                    className="h-3 w-3 rounded-full bg-green-500 absolute bottom-0 right-0 border border-card status-tooltip-trigger outline-none" 
-                    data-tooltip-id={`status-tooltip-${index}`}
-                    data-tooltip-place="top"
-                    tabIndex={-1}
-                  ></span>
-                  <Tooltip 
-                    id={`status-tooltip-${index}`} 
-                    content="Active" 
-                    place="top" 
-                    positionStrategy="fixed"
-                    offset={5}
-                    className="status-tooltip"
-                  />
-                </div>
-                
-                <div className="truncate min-w-0 flex-1 flex items-center py-0.5">
-                  <div className="flex flex-grow truncate min-w-0 items-center">
-                    <span className="truncate max-w-[120px] inline-block leading-none text-foreground" title={user.username}>
-                      {user.username}
-                    </span>
-                    
-                    {user.isRoomOwner && (
-                      <span 
-                        className="text-yellow-500 ml-1 flex-shrink-0 inline-flex items-center status-tooltip-trigger" 
-                        style={{ position: 'relative', top: '1px' }}
-                        data-tooltip-id="room-owner-tooltip"
-                      >
-                        👑
-                      </span>
-                    )}
-                    
-                    {user.clientId === clientId && 
-                      <span className="ml-1 text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">(You)</span>
-                    }
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
           
-          <Tooltip 
-            id="room-owner-tooltip" 
-            content="Room Owner" 
-            place="top" 
-            positionStrategy="fixed"
-            offset={5}
-            className="status-tooltip"
-          />
-        </div>
-        
-        {/* Audio Controls Placeholder for future implementation */}
-        <div className="p-4 border-t border-border">
-          <h3 className="text-sm font-semibold mb-2 text-foreground">Audio Controls</h3>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Volume</span>
-            <input type="range" className="w-32" />
+          <div className="mt-2 text-xs text-muted-foreground">
+            <span>Example: </span>
+            <span className="font-mono">https://www.youtube.com/watch?v=dQw4w9WgXcQ</span>
+            <span> or </span>
+            <span className="font-mono">dQw4w9WgXcQ</span>
           </div>
         </div>
-      </div>
-      
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Player Controls taking most space */}
-        <div className="flex-grow" style={{ minHeight: "60vh" }}>
+        
+        {/* Player Container - Always visible with responsive behavior */}
+        <div className={`video-container ${isCompactMode ? 'player-mode-fixed' : ''} `}>
           <PlayerControls
             currentTrack={roomState.currentTrack}
             queue={roomState.queue}
@@ -474,33 +366,129 @@ export default function RoomContentPage() {
             onUpdateQueue={updateQueue}
           />
         </div>
-        
-        {/* Queue at bottom */}
-        <div className="flex-none">
-          <Queue
-            queue={roomState.queue}
-            onUpdateQueue={updateQueue}
-          />
-        </div>
       </div>
       
-      {/* Right Sidebar - Chat */}
-      <div className="w-80 bg-card border-l border-border h-screen flex flex-col overflow-hidden">
-        {/* Style the container to take full height, no padding to avoid gaps */}
-        <div className="h-full flex flex-col"> 
-          {/* Apply styles to container instead of directly to ChatBox */}
-          <div className="flex-1 flex flex-col h-full">
-            <ChatBox
-              messages={roomState.chatHistory}
-              onSendMessage={sendChatMessage}
-              username={username}
-              clientId={clientId}
-              avatarId={avatarId}
-              roomName={roomName || 'the room'}
-            />
+      {/* Right Sidebar - Tabbed Interface (Chat/Queue/History) */}
+      <div className={`${isCompactMode ? 'w-full' : 'w-96'} bg-card h-screen flex flex-col overflow-hidden`}>
+        {/* Tab navigation */}
+        <div className="flex">
+          <button 
+            className={`py-2 px-4 flex-1 ${activeTab === 'chat' ? 'bg-accent text-foreground' : 'bg-transparent text-muted-foreground'}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            Chat
+          </button>
+          <button 
+            className={`py-2 px-4 flex-1 ${activeTab === 'queue' ? 'bg-accent text-foreground' : 'bg-transparent text-muted-foreground'}`}
+            onClick={() => setActiveTab('queue')}
+          >
+            Queue
+          </button>
+          <button 
+            className={`py-2 px-4 flex-1 ${activeTab === 'history' ? 'bg-accent text-foreground' : 'bg-transparent text-muted-foreground'}`}
+            onClick={() => setActiveTab('history')}
+          >
+            History
+          </button>
+        </div>
+        
+        {/* Tab content */}
+<div className="flex-1 flex flex-col h-full overflow-hidden">
+  {activeTab === 'chat' && (
+    <ChatBox
+      messages={roomState.chatHistory}
+      onSendMessage={sendChatMessage}
+      username={username}
+      clientId={clientId}
+      avatarId={avatarId}
+      roomName={roomName || 'the room'}
+      // isActive={activeTab === 'chat'}
+    />
+  )}
+  
+  {activeTab === 'queue' && (
+    <div className="flex-1 overflow-y-auto p-4">
+      <h3 className="font-medium text-foreground mb-2">Queue ({roomState.queue.length})</h3>
+      <ul className="divide-y divide-border">
+        {roomState.queue.map((item, index) => (
+          <li key={`queue-${index}`} className="py-2">
+            <div className="flex justify-between items-center">
+              <div className="truncate flex-1 pr-2">
+                <p className="font-medium truncate text-foreground">{item.title || `Video: ${item.id}`}</p>
+                <p className="text-sm text-muted-foreground">{item.source}</p>
+              </div>
+              <button
+                onClick={() => removeFromQueue(index)}
+                className="text-red-500 hover:text-red-700 flex-shrink-0"
+              >
+                Remove
+              </button>
+            </div>
+          </li>
+        ))}
+        
+        {roomState.queue.length === 0 && (
+          <li className="py-6 text-center text-muted-foreground">
+            Queue is empty. Add videos using the form above the player.
+          </li>
+        )}
+      </ul>
+    </div>
+  )}
+  
+  {activeTab === 'history' && (
+    <div className="flex-1 overflow-y-auto p-4">
+      <h3 className="font-medium text-foreground mb-2">Play History</h3>
+      <p className="text-center text-muted-foreground py-6">
+        Play history will be available soon.
+      </p>
+    </div>
+  )}
+</div>
+      </div>
+      
+      {/* Mobile Navigation Menu (only visible in compact mode) */}
+      {isCompactMode && (
+        <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border">
+          <div className="flex justify-around">
+            <button 
+              className={`p-3 flex flex-col items-center ${activeTab === 'chat' ? 'text-primary' : 'text-muted-foreground'}`}
+              onClick={() => setActiveTab('chat')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span className="text-xs mt-1">Chat</span>
+            </button>
+            <button 
+              className={`p-3 flex flex-col items-center ${activeTab === 'queue' ? 'text-primary' : 'text-muted-foreground'}`}
+              onClick={() => setActiveTab('queue')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              <span className="text-xs mt-1">Queue</span>
+            </button>
+            <button 
+              className={`p-3 flex flex-col items-center ${activeTab === 'users' ? 'text-primary' : 'text-muted-foreground'}`}
+              onClick={() => setActiveTab('users')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span className="text-xs mt-1">Users</span>
+            </button>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

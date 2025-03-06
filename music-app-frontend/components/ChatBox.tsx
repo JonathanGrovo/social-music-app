@@ -259,11 +259,7 @@ export default function ChatBox({
   }, []);
 
   return (
-    <div className="flex flex-col bg-card rounded-lg shadow-md overflow-hidden border border-border">
-      <div className="bg-muted py-3 px-4 border-b border-border">
-        <h2 className="font-semibold text-foreground">Chat</h2>
-      </div>
-      
+    <div className="flex flex-col bg-card overflow-hidden">
       <div 
         ref={messagesContainerRef}
         className="chat-messages-container overflow-y-auto flex-1 p-4 space-y-6"
