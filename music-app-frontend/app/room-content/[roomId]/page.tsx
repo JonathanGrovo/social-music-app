@@ -402,7 +402,7 @@ export default function RoomContentPage() {
       clientId={clientId}
       avatarId={avatarId}
       roomName={roomName || 'the room'}
-      // isActive={activeTab === 'chat'}
+      roomId={roomId}
     />
   )}
   
