@@ -16,39 +16,8 @@ function VirtualizedMessageList({
   onScrollChange
 }: VirtualizedMessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // Track if we should scroll to bottom on next render
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
-  // Track if user is manually scrolling
   const isUserScrollingRef = useRef(false);
-  // Track previous messages length for auto-scrolling
-  const prevMessagesLengthRef = useRef(messages.length);
-  // Track last scroll position
-  const lastScrollTopRef = useRef(0);
-  // Track last scroll height
-  const lastScrollHeightRef = useRef(0);
-  // Preserve message history when the component rerenders
-  const messagesHistoryRef = useRef(messages);
-  
-  // Update message history reference when props change
-  useEffect(() => {
-    // Only update if we have messages and they're different from current history
-    if (messages && messages.length > 0 && 
-        (messagesHistoryRef.current.length === 0 || 
-         messages[messages.length - 1] !== messagesHistoryRef.current[messagesHistoryRef.current.length - 1])) {
-      messagesHistoryRef.current = messages;
-    }
-  }, [messages]);
-  
-  // Safety check - if messages are empty but we have history, use history
-  const displayMessages = messages.length > 0 ? messages : messagesHistoryRef.current;
-
-  // Debug logging - temporary
-  useEffect(() => {
-    console.log(`Messages count: ${messages.length}, History count: ${messagesHistoryRef.current.length}`);
-    if (messages.length === 0 && messagesHistoryRef.current.length > 0) {
-      console.warn('Using preserved message history instead of empty messages array');
-    }
-  }, [messages.length]);
   
   // Scroll to bottom helper
   const scrollToBottom = useCallback(() => {
@@ -70,10 +39,6 @@ function VirtualizedMessageList({
   const handleScroll = useCallback(() => {
     if (!containerRef.current || isUserScrollingRef.current) return;
     
-    // Save current scroll position
-    lastScrollTopRef.current = containerRef.current.scrollTop;
-    lastScrollHeightRef.current = containerRef.current.scrollHeight;
-    
     // Determine if we're at the bottom
     const atBottom = isAtBottom();
     onScrollChange(atBottom);
@@ -82,30 +47,13 @@ function VirtualizedMessageList({
   
   // Scroll to bottom when new messages arrive if we were at the bottom
   useEffect(() => {
-    const currentMessagesLength = displayMessages.length;
-    const didMessagesChange = prevMessagesLengthRef.current !== currentMessagesLength;
-    prevMessagesLengthRef.current = currentMessagesLength;
-    
-    if (shouldScrollToBottom && didMessagesChange) {
+    if (shouldScrollToBottom && messages.length > 0) {
       // Use requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
         scrollToBottom();
       });
-    } else if (didMessagesChange && containerRef.current) {
-      // Maintain scroll position when new messages are added but we're not at bottom
-      const container = containerRef.current;
-      const newScrollHeight = container.scrollHeight;
-      const heightDifference = newScrollHeight - lastScrollHeightRef.current;
-      
-      if (heightDifference > 0) {
-        // Adjust scroll position to maintain view
-        container.scrollTop = lastScrollTopRef.current + heightDifference;
-        // Update references
-        lastScrollTopRef.current = container.scrollTop;
-        lastScrollHeightRef.current = newScrollHeight;
-      }
     }
-  }, [displayMessages.length, shouldScrollToBottom, scrollToBottom]);
+  }, [messages.length, shouldScrollToBottom, scrollToBottom]);
   
   // Add scroll listener
   useEffect(() => {
@@ -150,15 +98,15 @@ function VirtualizedMessageList({
         scrollbarColor: '#4a4d53 transparent'
       }}
     >
-      {displayMessages.length === 0 ? (
+      {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center text-muted-foreground py-4">
             No messages yet. Start the conversation!
           </div>
         </div>
       ) : (
-        // Render all messages for now to fix scrolling issues
-        displayMessages.map((group) => (
+        // Render all messages 
+        messages.map((group) => (
           <MessageGroup
             key={`group-${group.authorClientId}-${group.timestamp}`}
             authorClientId={group.authorClientId}

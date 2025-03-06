@@ -222,25 +222,16 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       setConnected(false);
     });
 
-    // Handle room sync
+    // In hooks/useSocket.ts, find the EventType.SYNC_RESPONSE handler and replace it with:
+
     socketIo.on(EventType.SYNC_RESPONSE, (data) => {
       log(`Received sync response with ${data.payload.queue?.length || 0} queue items and ${data.payload.users?.length || 0} users`);
-      log(`Raw SYNC_RESPONSE data: ${JSON.stringify(data)}`);
-      log(`User data in SYNC_RESPONSE: ${JSON.stringify(data.payload.users)}`);
       
-      // Extract room name if present
-      if (data.payload.roomName) {
-        log(`Room name from sync: ${data.payload.roomName}`);
-      }
-      // Process user list from server (already in UserInfo format)
+      // Process user list from server
       const userList = data.payload.users || [];
-      
-      // Normalize all user objects to ensure consistent structure during transition
       const normalizedUserList = userList.map(normalizeUserObject).filter(Boolean) as UserInfo[];
       
-      log(`Normalized user list: ${JSON.stringify(normalizedUserList)}`);
-      
-      // Process chat history to ensure usernames are up to date
+      // Process chat history - accept it directly from the server
       const processedChatHistory = (data.payload.chatHistory || []).map((msg: any) => {
         // Find the current username for this clientId from the normalized user list
         const userInfo = normalizedUserList.find((user) => user.clientId === msg.clientId);
@@ -252,55 +243,27 @@ export function useSocket(roomId: string, username: string, clientId: string, av
           content: msg.content,
           timestamp: msg.timestamp,
           avatarId: userInfo?.avatarId || msg.avatarId || 'avatar1',
-          roomName: data.payload.roomName || ''
         };
       });
       
-      // Apply all updates
-      setRoomState(prevState => {
-        // Make sure our own username is correct in the user list
-        const updatedUserList = normalizedUserList.map((user) => {
-          if (user.clientId === clientIdRef.current) {
-            // If our username is wrong in the sync response, correct it
-            if (user.username !== usernameRef.current) {
-              log(`Correcting our own username in sync response: ${user.username} -> ${usernameRef.current}`);
-              return {
-                ...user,
-                username: usernameRef.current,
-                avatarId: avatarIdRef.current
-              };
-            }
-            
-            // Make sure our avatar is correct
-            if (user.avatarId !== avatarIdRef.current) {
-              log(`Correcting our own avatar in sync response: ${user.avatarId} -> ${avatarIdRef.current}`);
-              return {
-                ...user,
-                avatarId: avatarIdRef.current
-              };
-            }
-          }
-          return user;
-        });
-        
-        log(`Updated user list after sync: ${JSON.stringify(updatedUserList)}`);
-        
-        return {
-          ...prevState,
-          currentTrack: data.payload.currentTrack,
-          queue: data.payload.queue || [],
-          chatHistory: processedChatHistory.length > 0 ? processedChatHistory : prevState.chatHistory,
-          users: updatedUserList,
-          roomName: data.payload.roomName || prevState.roomName // Error is here
-        };
-      });
+      // Apply all updates directly
+      setRoomState(prevState => ({
+        ...prevState,
+        chatHistory: processedChatHistory && processedChatHistory.length > 0
+          ? processedChatHistory
+          : prevState.chatHistory,
+        currentTrack: data.payload.currentTrack,
+        queue: data.payload.queue || [],
+        users: normalizedUserList,
+        roomName: data.payload.roomName || ''
+      }));
     });
 
     // Handle chat messages
     socketIo.on(EventType.CHAT_MESSAGE, (data) => {
       log(`Received chat message from ${data.username || data.userId} (${data.clientId})`);
       
-      // Add to chat history without losing existing messages
+      // Add to chat history
       setRoomState(prevState => ({
         ...prevState,
         chatHistory: [

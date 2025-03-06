@@ -225,3 +225,229 @@ body, * {
   scroll-padding-bottom: 8px;
   scroll-behavior: smooth;
 }
+
+/* Add these styles to your app/globals.css file */
+
+/* Emoji picker cross-browser consistency */
+emoji-picker {
+  /* Base styles */
+  --background: var(--card-background);
+  --border-color: var(--border);
+  --indicator-color: var(--primary);
+  --input-border-color: var(--border);
+  --input-font-color: var(--foreground);
+  --input-placeholder-color: var(--muted-foreground);
+  --outline-color: var(--ring);
+  
+  /* Force consistent sizing */
+  --emoji-size: 1.375rem;
+  --emoji-padding: 0.5rem;
+  
+  /* Set fixed dimensions */
+  width: 320px;
+  height: 400px;
+  
+  /* Use system emoji font for consistency */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  contain: layout paint style;
+}
+
+/* Dark theme specific styles */
+emoji-picker.dark-theme {
+  --background: #2b2d31;
+  --border-color: #26282c;
+  --text-color: #e9eaec;
+  --secondary-text-color: #949ba4;
+  --accent-color: #5865f2;
+  --hover-background: #414249;
+  color-scheme: dark;
+}
+
+/* Ensure emojis display consistently */
+emoji-picker .emoji {
+  font-size: var(--emoji-size);
+  vertical-align: middle;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* Add a subtle hover effect */
+emoji-picker button:hover .emoji {
+  transform: scale(1.1);
+  transition: transform 0.1s ease-in-out;
+}
+
+/* Make categories smoother */
+emoji-picker .emoji-menu,
+emoji-picker .emoji-container {
+  animation: emojisFadeIn 0.3s ease-out;
+}
+
+/* Animation for fade-in effect */
+@keyframes emojisFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fix positioning */
+.emoji-picker-container {
+  position: fixed;
+  z-index: 1000;
+  contain: layout paint style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Improve emoji buttons within picker */
+emoji-picker button {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+emoji-picker button:hover {
+  background-color: var(--hover-background);
+}
+
+/* Ensure selected category indicator is visible */
+emoji-picker nav.tabs {
+  border-bottom: 1px solid var(--border-color);
+}
+
+emoji-picker nav.tabs button.selected {
+  border-bottom: 3px solid var(--primary);
+  color: var(--primary);
+}
+
+/* Firefox-specific emoji fixes */
+@-moz-document url-prefix() {
+  emoji-picker {
+    /* Use system emoji font */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
+                "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  }
+  
+  .emoji-container .emoji,
+  .emoji-picker .emoji {
+    /* Ensure consistent emoji appearance */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif !important;
+  }
+  
+  /* Increase emoji visibility */
+  emoji-picker button .emoji {
+    font-size: 1.4rem !important;
+  }
+}
+
+/* Universal emoji picker styles (all browsers) */
+emoji-picker {
+  /* Basic styling */
+  --background: var(--card-background);
+  --border-color: var(--border);
+  --indicator-color: var(--primary);
+  --input-border-color: var(--border);
+  --input-font-color: var(--foreground);
+  --input-placeholder-color: var(--muted-foreground);
+  --outline-color: var(--ring);
+  
+  /* Set fixed dimensions */
+  width: 320px;
+  height: 400px;
+  
+  /* Contain rendering for performance */
+  contain: layout paint style;
+  
+  /* Remove borders */
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Dark theme specific styles */
+emoji-picker.dark-theme {
+  --background: #2b2d31;
+  --border-color: #26282c;
+  --text-color: #e9eaec;
+  --secondary-text-color: #949ba4;
+  --accent-color: #5865f2;
+  --hover-background: #414249;
+  color-scheme: dark;
+}
+
+/* Ensure selected category indicator is visible */
+emoji-picker nav.tabs {
+  border-bottom: 1px solid var(--border-color);
+}
+
+emoji-picker nav.tabs button.selected {
+  border-bottom: 3px solid var(--primary);
+  color: var(--primary);
+}
+
+/* Add smooth hover effect */
+emoji-picker button:hover .emoji {
+  transform: scale(1.1);
+  transition: transform 0.1s ease-in-out;
+}
+
+/* Prevent layout shifts when opening emoji picker */
+.emoji-picker-container {
+  position: fixed;
+  z-index: 1000;
+  contain: layout paint style;
+}
+
+/* General emoji consistency in messages */
+.message-group p,
+.chat-messages-container p {
+  /* Ensure emoji fonts are consistently loaded */
+  font-family: -apple-system, BlinkMacSystemFont, 
+    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, 
+    "Open Sans", "Helvetica Neue", sans-serif, 
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+/* Add these styles to globals.css for Firefox emoji consistency */
+
+/* Firefox-specific emoji styling */
+@-moz-document url-prefix() {
+  /* Style for emoji characters wrapped by our processor */
+  .firefox-emoji {
+    font-family: -moz-system-unicode !important;
+    font-size: 1.2em;
+    vertical-align: -0.1em;
+    display: inline-block;
+  }
+  
+  /* Style for the emoji picker to make it match */
+  emoji-picker {
+    font-family: -moz-system-unicode !important;
+  }
+  
+  /* Fix font inconsistencies in emoji picker */
+  emoji-picker button:not(.nav-button) span {
+    font-family: -moz-system-unicode !important;
+  }
+  
+  /* Specifically target the emoji area within picker */
+  emoji-picker .emoji-container section,
+  emoji-picker .emoji {
+    font-family: -moz-system-unicode !important;
+  }
+  
+  /* Ensure that emoji characters in the textarea match */
+  textarea {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif, -moz-system-unicode !important;
+  }
+}
+
+/* Emoji pop animation for Firefox */
+@-moz-document url-prefix() {
+  @keyframes firefoxEmojiPop {
+    0% { transform: scale(0.8); opacity: 0.7; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  .firefox-emoji {
+    animation: firefoxEmojiPop 0.2s ease-out;
+  }
+}

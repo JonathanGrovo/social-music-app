@@ -1,8 +1,8 @@
 // components/MessageInput.tsx
 import { useRef, useCallback, useState, memo, useEffect } from 'react';
 import useAutoResizeTextarea from '../hooks/useAutoResizeTextarea';
-import EmojiPicker from 'emoji-picker-react';
-import { EmojiClickData } from 'emoji-picker-react';
+import 'emoji-picker-element';
+import React from 'react';
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
@@ -22,6 +22,7 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
   // Reference to the emoji picker container for click-away detection
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const pickerRef = useRef<any>(null);
 
   // Use our custom hook for textarea auto-resizing with faster response
   const { textareaRef, resetHeight, adjustHeight } = useAutoResizeTextarea({
@@ -29,6 +30,58 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
     maxHeight: 200,
     debounceMs: 10 // Fast response time
   });
+  
+  // Initialize emoji picker when it's shown
+  useEffect(() => {
+    if (showEmojiPicker && pickerRef.current) {
+      // Initialize picker once it's in the DOM
+      const picker = pickerRef.current;
+      
+      // Add click handler
+      const handleEmojiClick = (event: any) => {
+        const emoji = event.detail.unicode;
+        
+        if (textareaRef.current) {
+          const start = textareaRef.current.selectionStart || 0;
+          const end = textareaRef.current.selectionEnd || 0;
+          const text = textareaRef.current.value;
+          
+          // Insert the emoji at cursor position
+          const newText = text.substring(0, start) + emoji + text.substring(end);
+          textareaRef.current.value = newText;
+          
+          // Update the ref
+          messageContentRef.current = newText;
+          
+          // Update the isEmpty state
+          setIsEmpty(newText.trim().length === 0);
+          
+          // Adjust height if needed
+          adjustHeight();
+          
+          // Set cursor position after the inserted emoji
+          const newCursorPos = start + emoji.length;
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.focus();
+              textareaRef.current.selectionStart = newCursorPos;
+              textareaRef.current.selectionEnd = newCursorPos;
+            }
+          }, 0);
+        }
+        
+        // Close the picker after selection
+        setShowEmojiPicker(false);
+      };
+      
+      picker.addEventListener('emoji-click', handleEmojiClick);
+      
+      // Cleanup handler on unmount
+      return () => {
+        picker.removeEventListener('emoji-click', handleEmojiClick);
+      };
+    }
+  }, [showEmojiPicker, adjustHeight, textareaRef]);
   
   // Click away listener for emoji picker
   useEffect(() => {
@@ -104,41 +157,6 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
     }
   }, [handleSend, adjustHeight, showEmojiPicker]);
   
-  // Handle emoji click
-  const handleEmojiClick = useCallback((emojiData: EmojiClickData) => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart || 0;
-      const end = textareaRef.current.selectionEnd || 0;
-      const text = textareaRef.current.value;
-      
-      // Insert the emoji at cursor position
-      const newText = text.substring(0, start) + emojiData.emoji + text.substring(end);
-      textareaRef.current.value = newText;
-      
-      // Update the ref
-      messageContentRef.current = newText;
-      
-      // Update the isEmpty state
-      setIsEmpty(newText.trim().length === 0);
-      
-      // Adjust height if needed
-      adjustHeight();
-      
-      // Set cursor position after the inserted emoji
-      const newCursorPos = start + emojiData.emoji.length;
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.selectionStart = newCursorPos;
-          textareaRef.current.selectionEnd = newCursorPos;
-        }
-      }, 0);
-    }
-    
-    // Close the picker after selection
-    setShowEmojiPicker(false);
-  }, [adjustHeight, textareaRef]);
-  
   // Toggle emoji picker
   const toggleEmojiPicker = useCallback(() => {
     setShowEmojiPicker(prev => !prev);
@@ -157,22 +175,17 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
       {showEmojiPicker && (
         <div 
           ref={emojiPickerRef}
-          className="absolute bottom-16 right-4 z-50 rounded-lg overflow-hidden shadow-lg"
+          className="fixed bottom-16 right-4 z-50 rounded-lg overflow-hidden"
+          style={{ 
+            transform: 'translateZ(0)',
+            contain: 'layout paint style'
+          }}
         >
-          <EmojiPicker
-            onEmojiClick={handleEmojiClick}
-            lazyLoadEmojis={true} // Load all emojis immediately for better UX
-            searchDisabled={false}
-            skinTonesDisabled={false}
-            theme="dark"
-            emojiStyle="native" // Use native emoji style to match system emojis
-            width={320}
-            height={400}
-            previewConfig={{
-              defaultEmoji: "1f60a",
-              defaultCaption: "Choose an emoji..."
-            }}
-          />
+          {/* Use createElement instead of JSX for the custom element */}
+          {React.createElement('emoji-picker', {
+            ref: pickerRef,
+            class: 'dark-theme',
+          })}
         </div>
       )}
       
@@ -183,7 +196,9 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none overflow-y-auto"
-          style={{ height: '44px' }} // Set fixed initial height to 44px
+          style={{ 
+            height: '44px',
+          }}
           placeholder={`Message ${roomName?.length > 15 ? roomName.substring(0, 15) + '...' : roomName}`}
           rows={1}
         />

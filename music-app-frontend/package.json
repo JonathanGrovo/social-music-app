@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "emoji-picker-react": "^4.10.0",
+    "emoji-picker-element": "^1.18.3",
     "lodash": "^4.17.21",
     "next": "15.1.7",
     "react": "^19.0.0",
