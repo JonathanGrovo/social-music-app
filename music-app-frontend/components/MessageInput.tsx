@@ -1,6 +1,8 @@
 // components/MessageInput.tsx
-import { useRef, useCallback, useState, memo } from 'react';
+import { useRef, useCallback, useState, memo, useEffect } from 'react';
 import useAutoResizeTextarea from '../hooks/useAutoResizeTextarea';
+import EmojiPicker from 'emoji-picker-react';
+import { EmojiClickData } from 'emoji-picker-react';
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
@@ -13,13 +15,43 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
   
   // We still need a minimal state for controlled component
   const [isEmpty, setIsEmpty] = useState(true);
+  
+  // State for emoji picker visibility
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // Reference to the emoji picker container for click-away detection
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
   // Use our custom hook for textarea auto-resizing with faster response
   const { textareaRef, resetHeight, adjustHeight } = useAutoResizeTextarea({
-    minHeight: 40,
+    minHeight: 44, // Set to 44px to match the natural height
     maxHeight: 200,
     debounceMs: 10 // Fast response time
   });
+  
+  // Click away listener for emoji picker
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showEmojiPicker && 
+          emojiPickerRef.current && 
+          emojiButtonRef.current && 
+          !emojiPickerRef.current.contains(event.target as Node) &&
+          !emojiButtonRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    // Add event listener when emoji picker is shown
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
   
   // Handle input change without causing re-renders
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -32,23 +64,33 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
   const handleSend = useCallback(() => {
     const content = messageContentRef.current.trim();
     if (content) {
+      // Send the message first
       onSendMessage(content);
+      
       // Clear the textarea
       if (textareaRef.current) {
         textareaRef.current.value = '';
         resetHeight();
+        
+        // Focus back on the textarea
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+          }
+        }, 0);
       }
+      
+      // Reset our state
       messageContentRef.current = '';
       setIsEmpty(true);
     }
   }, [onSendMessage, resetHeight, textareaRef]);
 
-  // Handle key presses with Shift+Enter support and immediate height adjustment
+  // Handle key presses with Shift+Enter support
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       if (e.shiftKey) {
         // Shift+Enter: add a new line
-        // Manually trigger height adjustment on next frame
         requestAnimationFrame(adjustHeight);
         return; // Let the default behavior happen
       } else {
@@ -56,21 +98,111 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
         e.preventDefault();
         handleSend();
       }
+    } else if (e.key === 'Escape' && showEmojiPicker) {
+      // Close emoji picker on Escape key
+      setShowEmojiPicker(false);
     }
-  }, [handleSend, adjustHeight]);
+  }, [handleSend, adjustHeight, showEmojiPicker]);
+  
+  // Handle emoji click
+  const handleEmojiClick = useCallback((emojiData: EmojiClickData) => {
+    if (textareaRef.current) {
+      const start = textareaRef.current.selectionStart || 0;
+      const end = textareaRef.current.selectionEnd || 0;
+      const text = textareaRef.current.value;
+      
+      // Insert the emoji at cursor position
+      const newText = text.substring(0, start) + emojiData.emoji + text.substring(end);
+      textareaRef.current.value = newText;
+      
+      // Update the ref
+      messageContentRef.current = newText;
+      
+      // Update the isEmpty state
+      setIsEmpty(newText.trim().length === 0);
+      
+      // Adjust height if needed
+      adjustHeight();
+      
+      // Set cursor position after the inserted emoji
+      const newCursorPos = start + emojiData.emoji.length;
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.selectionStart = newCursorPos;
+          textareaRef.current.selectionEnd = newCursorPos;
+        }
+      }, 0);
+    }
+    
+    // Close the picker after selection
+    setShowEmojiPicker(false);
+  }, [adjustHeight, textareaRef]);
+  
+  // Toggle emoji picker
+  const toggleEmojiPicker = useCallback(() => {
+    setShowEmojiPicker(prev => !prev);
+    
+    // Focus the textarea after a delay to ensure cursor position is maintained
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 0);
+  }, [textareaRef]);
 
   return (
     <div className="px-4 pb-4">
+      {/* Emoji picker */}
+      {showEmojiPicker && (
+        <div 
+          ref={emojiPickerRef}
+          className="absolute bottom-16 right-4 z-50 rounded-lg overflow-hidden shadow-lg"
+        >
+          <EmojiPicker
+            onEmojiClick={handleEmojiClick}
+            lazyLoadEmojis={true} // Load all emojis immediately for better UX
+            searchDisabled={false}
+            skinTonesDisabled={false}
+            theme="dark"
+            emojiStyle="native" // Use native emoji style to match system emojis
+            width={320}
+            height={400}
+            previewConfig={{
+              defaultEmoji: "1f60a",
+              defaultCaption: "Choose an emoji..."
+            }}
+          />
+        </div>
+      )}
+      
       <div className="flex items-start bg-[#383a40] dark:bg-[#40444b] rounded-lg overflow-hidden">
         {/* Message textarea with auto-resize */}
         <textarea
           ref={textareaRef}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none min-h-[40px] max-h-[200px] overflow-y-auto"
+          className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none overflow-y-auto"
+          style={{ height: '44px' }} // Set fixed initial height to 44px
           placeholder={`Message ${roomName?.length > 15 ? roomName.substring(0, 15) + '...' : roomName}`}
           rows={1}
         />
+        
+        {/* Emoji button */}
+        <button
+          ref={emojiButtonRef}
+          type="button" 
+          onClick={toggleEmojiPicker}
+          className="p-2 mx-1 rounded flex-shrink-0 mt-1 text-[#959ba4] hover:text-[#bdc0c5] transition-colors duration-200"
+          title="Add emoji"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+          </svg>
+        </button>
         
         {/* Send button */}
         <button

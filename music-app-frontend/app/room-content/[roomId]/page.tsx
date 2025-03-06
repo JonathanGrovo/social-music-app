@@ -428,21 +428,25 @@ export default function RoomContentPage() {
         ))}
         
         {roomState.queue.length === 0 && (
-          <li className="py-6 text-center text-muted-foreground">
+        <div className="flex items-center justify-center h-full">
+          <div className="py-6 text-center text-muted-foreground">
             Queue is empty. Add videos using the form above the player.
-          </li>
+          </div>
+        </div>
         )}
       </ul>
     </div>
   )}
   
   {activeTab === 'history' && (
-    <div className="flex-1 overflow-y-auto p-4">
-      <h3 className="font-medium text-foreground mb-2">Play History</h3>
+  <div className="flex-1 overflow-y-auto p-4">
+    <h3 className="font-medium text-foreground mb-2">Play History</h3>
+    <div className="flex items-center justify-center h-[calc(100%-2rem)]">
       <p className="text-center text-muted-foreground py-6">
         Play history will be available soon.
       </p>
     </div>
+  </div>
   )}
 </div>
       </div>

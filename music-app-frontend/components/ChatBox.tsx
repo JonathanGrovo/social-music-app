@@ -187,7 +187,7 @@ function ChatBox({
   }, [formatTimeOnly]);
 
   return (
-    <div className="flex flex-col bg-card overflow-hidden">
+    <div className="flex flex-col bg-card overflow-hidden h-full">
       {/* Virtualized message list for better performance */}
       <VirtualizedMessageList
         messages={groupedMessages}

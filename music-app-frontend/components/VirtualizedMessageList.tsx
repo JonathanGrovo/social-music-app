@@ -151,8 +151,10 @@ function VirtualizedMessageList({
       }}
     >
       {displayMessages.length === 0 ? (
-        <div className="text-center text-muted-foreground py-4">
-          No messages yet. Start the conversation!
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-muted-foreground py-4">
+            No messages yet. Start the conversation!
+          </div>
         </div>
       ) : (
         // Render all messages for now to fix scrolling issues
