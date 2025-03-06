@@ -3,17 +3,13 @@
 import { useEffect } from 'react';
 
 export default function ThemeInitializer() {
-  // Initialize theme on component mount
+  // Initialize theme on component mount - always use dark mode
   useEffect(() => {
-    // Check for saved theme preference or use system preference
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // Always add dark class to the document
+    document.documentElement.classList.add('dark');
     
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    // For consistency, still store the theme preference in localStorage
+    localStorage.setItem('theme', 'dark');
   }, []);
 
   // This component doesn't render anything visible

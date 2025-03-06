@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import ThemeToggle from '../components/ThemeToggle';
 import { generateUsername } from '../utils/username';
 import { generateRandomAvatarId } from '../utils/avatar';
 
@@ -132,10 +131,6 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
       <div className="relative bg-card p-8 rounded-lg shadow-md w-full max-w-md border border-border">
-        <div className="absolute top-4 right-4">
-          <ThemeToggle />
-        </div>
-        
         <h1 className="text-2xl font-bold mb-6 text-center text-foreground">Social Music Listening</h1>
         
         {error && (
