@@ -1,5 +1,5 @@
 // components/ChatBox.tsx
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { memo } from 'react';
 import { ChatMessage } from '../types';
 import MessageInput from './MessageInput';
@@ -13,6 +13,7 @@ interface ChatBoxProps {
   avatarId: string;
   roomName?: string;
   roomId: string;
+  activeTab?: string; // Optional active tab prop
 }
 
 function ChatBox({ 
@@ -22,8 +23,12 @@ function ChatBox({
   clientId, 
   avatarId,
   roomName = "the room",
-  roomId
+  roomId,
+  activeTab
 }: ChatBoxProps) {
+  // Add a ref to track if a message was just sent by this user
+  const userJustSentMessageRef = useRef(false);
+  
   // Format time only (HH:MM AM/PM)
   const formatTimeOnly = useCallback((timestamp: number): string => {
     const date = new Date(timestamp);
@@ -58,6 +63,12 @@ function ChatBox({
       year: 'numeric'
     }) + ' at ' + formatTimeOnly(timestamp);
   }, [formatTimeOnly]);
+  
+  // Handle when user sends a message - we'll wrap the passed handler
+  const handleSendMessage = useCallback((content: string) => {
+    userJustSentMessageRef.current = true;
+    onSendMessage(content);
+  }, [onSendMessage]);
 
   // Grouping messages for display
   const MESSAGE_GROUPING_THRESHOLD = 5 * 60 * 1000; // 5 minutes
@@ -116,19 +127,24 @@ function ChatBox({
     }, []);
   })();
 
+  // Handle scroll position changes
+  const handleScrollChange = useCallback((isNearBottom: boolean) => {
+    // Could be used in the future if needed
+  }, []);
+
   return (
     <div className="flex flex-col bg-card overflow-hidden h-full">
-      {/* Virtualized message list */}
       <VirtualizedMessageList
         messages={groupedMessages}
         formatMessageDate={formatMessageDate}
         formatTimeOnly={formatTimeOnly}
-        onScrollChange={() => {}}
+        onScrollChange={() => {}} // We don't need this for now
+        activeTab={activeTab}    // Make sure to pass this prop
       />
       
       {/* Use the optimized input component */}
       <MessageInput 
-        onSendMessage={onSendMessage} 
+        onSendMessage={handleSendMessage} 
         roomName={roomName}
       />
     </div>

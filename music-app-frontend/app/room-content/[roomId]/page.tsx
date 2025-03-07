@@ -143,21 +143,6 @@ export default function RoomContentPage() {
       playbackStateRef.current.queue = [...roomState.queue];
     }
   }, [roomState]);
-
-  // Also add a useEffect to handle tab switching and update scroll button visibility
-  useEffect(() => {
-    // When active tab changes to chat, make sure scroll position is checked
-    if (activeTab === 'chat') {
-      // Short delay to ensure DOM is updated
-      setTimeout(() => {
-        // Dispatch a scroll event to force recalculation of button visibility
-        const chatContainer = document.querySelector('.chat-messages-container');
-        if (chatContainer) {
-          chatContainer.dispatchEvent(new Event('scroll'));
-        }
-      }, 100);
-    }
-  }, [activeTab]);
   
   // Determine layout mode based on window dimensions
   const isCompactMode = windowWidth < 768; // Below tablet breakpoint
@@ -394,7 +379,7 @@ export default function RoomContentPage() {
         
         {/* Tab content */}
 <div className="flex-1 flex flex-col h-full overflow-hidden">
-  {activeTab === 'chat' && (
+  <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col h-full`}>
     <ChatBox
       messages={roomState.chatHistory}
       onSendMessage={sendChatMessage}
@@ -403,8 +388,9 @@ export default function RoomContentPage() {
       avatarId={avatarId}
       roomName={roomName || 'the room'}
       roomId={roomId}
+      activeTab={activeTab}  // Make sure to pass this
     />
-  )}
+  </div>
   
   {activeTab === 'queue' && (
     <div className="flex-1 overflow-y-auto p-4">
