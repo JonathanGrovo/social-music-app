@@ -59,7 +59,7 @@ export default function RoomContentPage() {
     window.addEventListener('resize', updateWindowDimensions);
     
     // Get username and clientId from localStorage
-    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId');
+    const storedUsername = localStorage.getItem('username')
     const storedClientId = localStorage.getItem('clientId');
     const storedAvatarId = localStorage.getItem('avatarId') || 'avatar1';
     
@@ -223,9 +223,8 @@ export default function RoomContentPage() {
       return;
     }
     
-    // Store the new username in localStorage - update both keys for compatibility
+    // Store the new username in localStorage
     localStorage.setItem('username', newUsername);
-    localStorage.setItem('userId', newUsername); // For backward compatibility
     
     // Update local state immediately
     setUsername(newUsername);
@@ -377,7 +376,7 @@ export default function RoomContentPage() {
           </button>
         </div>
         
-        {/* Tab content */}
+{/* Tab content */}
 <div className="flex-1 flex flex-col h-full overflow-hidden">
   <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col h-full`}>
     <ChatBox

@@ -30,10 +30,10 @@ export default function JoinRoomPage() {
         }
         
         // Get username from localStorage or generate a new one
-        let username = localStorage.getItem('userId');
+        let username = localStorage.getItem('username');
         if (!username) {
           username = generateUsername();
-          localStorage.setItem('userId', username);
+          localStorage.setItem('username', username);
         }
         
         // Create a unique client ID if it doesn't exist

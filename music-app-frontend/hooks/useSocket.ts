@@ -17,8 +17,8 @@ const normalizeUserObject = (user: any): UserInfo | null => {
   // Handle all possible formats during the transition
   return {
     clientId: user.clientId,
-    username: user.username || (typeof user.userId === 'object' ? user.userId.userId : user.userId) || 'Unknown User',
-    avatarId: user.avatarId || (typeof user.userId === 'object' ? user.userId.avatarId : null) || 'avatar1',
+    username: user.username || 'Unknown User',
+    avatarId: user.avatarId || 'avatar1',
     isRoomOwner: !!user.isRoomOwner
   };
 };
@@ -37,7 +37,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
   });
   
   // Use refs to keep track of current values in callbacks
-  const usernameRef = useRef(username);  // Renamed from userIdRef
+  const usernameRef = useRef(username);
   const clientIdRef = useRef(clientId);
   const roomIdRef = useRef(roomId);
   const avatarIdRef = useRef(avatarId);
@@ -222,8 +222,6 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       setConnected(false);
     });
 
-    // In hooks/useSocket.ts, find the EventType.SYNC_RESPONSE handler and replace it with:
-
     socketIo.on(EventType.SYNC_RESPONSE, (data) => {
       log(`Received sync response with ${data.payload.queue?.length || 0} queue items and ${data.payload.users?.length || 0} users`);
       
@@ -239,7 +237,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         // Normalize the message format
         return {
           clientId: msg.clientId,
-          username: userInfo?.username || msg.username || msg.userId || 'Unknown User',
+          username: userInfo?.username || msg.username || 'Unknown User',
           content: msg.content,
           timestamp: msg.timestamp,
           avatarId: userInfo?.avatarId || msg.avatarId || 'avatar1',
@@ -261,7 +259,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
 
     // Handle chat messages
     socketIo.on(EventType.CHAT_MESSAGE, (data) => {
-      log(`Received chat message from ${data.username || data.userId} (${data.clientId})`);
+      log(`Received chat message from ${data.username} (${data.clientId})`);
       
       // Add to chat history
       setRoomState(prevState => ({
@@ -269,7 +267,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         chatHistory: [
           ...prevState.chatHistory,
           {
-            username: data.username || data.userId,
+            username: data.username,
             content: data.payload.content,
             timestamp: data.timestamp,
             clientId: data.clientId,
@@ -308,12 +306,12 @@ export function useSocket(roomId: string, username: string, clientId: string, av
 
     // Handle user join
     socketIo.on(EventType.USER_JOIN, (data) => {
-      log(`User joined: ${data.username || data.userId} (${data.clientId})`);
+      log(`User joined: ${data.username} (${data.clientId})`);
       log(`Raw USER_JOIN data: ${JSON.stringify(data)}`);
       
       // Normalize the user data
       const normalizedUser = normalizeUserObject({
-        username: data.username || data.userId,
+        username: data.username,
         clientId: data.clientId,
         avatarId: data.avatarId || data.payload?.avatarId || 'avatar1',
         isRoomOwner: data.isRoomOwner || data.payload?.isRoomOwner || false
@@ -351,7 +349,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
 
     // Handle user leave
     socketIo.on(EventType.USER_LEAVE, (data) => {
-      log(`User left: ${data.username || data.userId} (${data.clientId})`);
+      log(`User left: ${data.username} (${data.clientId})`);
       
       // Remove the user from our state
       setRoomState(prevState => ({
@@ -582,7 +580,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log(`Sending chat message: ${content.substring(0, 20)}...`);
       socketRef.current.emit(EventType.CHAT_MESSAGE, {
         roomId: roomIdRef.current,
-        username: usernameRef.current,  // Renamed from userId
+        username: usernameRef.current,
         clientId: clientIdRef.current,
         avatarId: avatarIdRef.current,
         payload: { content },
@@ -599,7 +597,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log(`Sending playback update: ${trackId} (${isPlaying ? 'playing' : 'paused'} at ${currentTime}s)`);
       socketRef.current.emit(EventType.PLAYBACK_UPDATE, {
         roomId: roomIdRef.current,
-        username: usernameRef.current,  // Renamed from userId
+        username: usernameRef.current,
         clientId: clientIdRef.current,
         payload: { currentTime, isPlaying, trackId, source },
         timestamp: Date.now()
@@ -615,7 +613,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log(`Sending queue update with ${queue.length} items`);
       socketRef.current.emit(EventType.QUEUE_UPDATE, {
         roomId: roomIdRef.current,
-        username: usernameRef.current,  // Renamed from userId
+        username: usernameRef.current,
         clientId: clientIdRef.current,
         payload: { queue },
         timestamp: Date.now()

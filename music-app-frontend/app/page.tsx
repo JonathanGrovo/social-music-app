@@ -17,7 +17,7 @@ export default function Home() {
   // Set initial username and avatar on component mount
   useEffect(() => {
     // Check if there's a stored username
-    const storedUsername = localStorage.getItem('username') || localStorage.getItem('userId');
+    const storedUsername = localStorage.getItem('username');
     const storedAvatarId = localStorage.getItem('avatarId');
     
     if (storedUsername) {
@@ -53,7 +53,6 @@ export default function Home() {
       
       // Store the username
       localStorage.setItem('username', username);
-      localStorage.setItem('userId', username);  // For backward compatibility
       
       // Store the avatar
       localStorage.setItem('avatarId', avatarId);
@@ -102,7 +101,6 @@ export default function Home() {
 
     // Store the username
     localStorage.setItem('username', username);
-    localStorage.setItem('userId', username);  // For backward compatibility
     
     // Store the avatar
     localStorage.setItem('avatarId', avatarId);

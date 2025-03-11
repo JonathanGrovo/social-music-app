@@ -1,7 +1,7 @@
 // types/index.ts
 
 export interface ChatMessage {
-  username: string;    // Renamed from userId
+  username: string;
   content: string;
   timestamp: number;
   clientId: string;    // Still needed for identification
@@ -17,7 +17,7 @@ export interface QueueItem {
 }
 
 export interface UserInfo {
-  username: string;    // Renamed from userId - this is the display name
+  username: string;    // The display name
   clientId: string;    // Unique identifier for the user's connection
   avatarId: string;    // Avatar identifier
   isRoomOwner?: boolean; // Whether this user owns the room

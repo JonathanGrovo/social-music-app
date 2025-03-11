@@ -14,7 +14,7 @@ export const setSocketManager = (manager: SocketManager) => {
 
 const router = Router();
 
-// Get all rooms
+// Get all rooms (this endpoint is currently unused)
 router.get('/', (req, res) => {
   if (!socketManager) {
     return res.status(500).json({

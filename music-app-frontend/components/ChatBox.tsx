@@ -127,11 +127,6 @@ function ChatBox({
     }, []);
   })();
 
-  // Handle scroll position changes
-  const handleScrollChange = useCallback((isNearBottom: boolean) => {
-    // Could be used in the future if needed
-  }, []);
-
   return (
     <div className="flex flex-col bg-card overflow-hidden h-full">
       <VirtualizedMessageList

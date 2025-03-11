@@ -1,5 +1,4 @@
 // src/types/socket.ts
-
 export enum EventType {
   PLAYBACK_UPDATE = 'PLAYBACK_UPDATE',
   QUEUE_UPDATE = 'QUEUE_UPDATE',
@@ -10,12 +9,12 @@ export enum EventType {
   SYNC_RESPONSE = 'SYNC_RESPONSE',
   USERNAME_CHANGE = 'USERNAME_CHANGE',
   AVATAR_CHANGE = 'AVATAR_CHANGE',
-  ROOM_OWNER_CHANGE = 'ROOM_OWNER_CHANGE'  // New event for room ownership changes
+  ROOM_OWNER_CHANGE = 'ROOM_OWNER_CHANGE'
 }
 
 export interface SocketMessage {
   roomId: string;
-  username: string;   // Renamed from userId
+  username: string;
   clientId: string;   // Client ID is required
   avatarId?: string;  // Optional avatar ID
   payload: any;
@@ -51,8 +50,8 @@ export interface QueueMessage extends SocketMessage {
 
 export interface UsernameChangeMessage extends SocketMessage {
   payload: {
-    oldUsername: string;  // Renamed from oldUserId
-    newUsername: string;  // Renamed from newUserId
+    oldUsername: string;
+    newUsername: string;
     clientId: string;
     avatarId?: string;
   };
@@ -63,7 +62,7 @@ export interface AvatarChangeMessage extends SocketMessage {
     oldAvatarId: string;
     newAvatarId: string;
     clientId: string;
-    username: string;  // Renamed from userId
+    username: string;
   };
 }
 
@@ -76,7 +75,7 @@ export interface RoomOwnerChangeMessage extends SocketMessage {
 
 // Type for user info in room
 export interface UserInfo {
-  username: string;    // Renamed from userId - display name
+  username: string;
   clientId: string;    // Unique client identifier
   avatarId: string;    // Avatar identifier
   isRoomOwner?: boolean; // Whether this user owns the room

@@ -1,14 +1,13 @@
-// src/config/socket.ts - Key parts that need to be updated
+// src/config/socket.ts
 
 import { Server as HTTPServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { EventType } from '../types/socket';
 
-// Updated interface for user data
 interface UserData {
-  username: string;  // Renamed from userId
-  avatarId: string;  // Added avatar support
-  isRoomOwner?: boolean; // Flag for room ownership
+  username: string;
+  avatarId: string;
+  isRoomOwner?: boolean;
 }
 
 // Store room state for synchronization and history
@@ -29,7 +28,7 @@ interface RoomState {
     duration?: number;
   }>;
   chatHistory: Array<{
-    username: string;  // Renamed from userId
+    username: string;
     content: string;
     timestamp: number;
     clientId: string;
@@ -279,8 +278,7 @@ export class SocketManager {
       socket.on(EventType.CHAT_MESSAGE, (message: any) => {
         console.log('Received chat message:', message);
         const { roomId, payload, timestamp, clientId } = message;
-        // Support both old and new field names
-        const username = message.username || message.userId;
+        const username = message.username
         const avatarId = message.avatarId || 'avatar1';
         
         // Add to persistent chat history
