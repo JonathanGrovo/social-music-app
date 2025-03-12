@@ -14,7 +14,7 @@ interface AutoResizeOptions {
  * @returns An object with the ref and reset function
  */
 export function useAutoResizeTextarea({
-  minHeight = 40,
+  minHeight = 44,
   maxHeight = 200,
   debounceMs = 10 // Much faster response time
 }: AutoResizeOptions = {}) {
