@@ -80,9 +80,13 @@ export function useAutoResizeTextarea({
         e.key === 'Delete' || 
         e.key === 'Enter'
       ) {
-        // Use immediate adjustment for better response
-        // We'll use requestAnimationFrame to ensure it happens on the next paint
-        requestAnimationFrame(adjustHeightImmediate);
+        // Check if we're in browser environment
+        if (typeof window !== 'undefined') {
+          requestAnimationFrame(adjustHeightImmediate);
+        } else {
+          // Just call it directly on the server (will be a no-op)
+          adjustHeightImmediate();
+        }
       }
     };
     

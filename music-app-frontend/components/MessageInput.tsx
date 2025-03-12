@@ -1,7 +1,9 @@
 // components/MessageInput.tsx
+
+'use client'
+
 import { useRef, useCallback, useState, memo, useEffect } from 'react';
 import useAutoResizeTextarea from '../hooks/useAutoResizeTextarea';
-import 'emoji-picker-element';
 import React from 'react';
 
 interface MessageInputProps {
@@ -10,6 +12,12 @@ interface MessageInputProps {
 }
 
 function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProps) {
+  // Dynamic import of emoji-picker-element that only occurs client side
+  useEffect(() => {
+    // Dynamically import emoji-picker-element only on the client side
+    import('emoji-picker-element');
+  }, []);
+  
   // Using useRef for the textarea content to avoid re-renders during typing
   const messageContentRef = useRef<string>('');
   
