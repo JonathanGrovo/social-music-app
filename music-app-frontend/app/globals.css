@@ -451,3 +451,41 @@ emoji-picker button:hover .emoji {
     animation: firefoxEmojiPop 0.2s ease-out;
   }
 }
+
+/* LARGER EMOJI FORMATTING */
+
+/* Add these to your app/globals.css file */
+.large-emoji {
+  font-size: 2rem; /* Larger emoji size */
+  line-height: 1.2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.large-emoji span {
+  display: inline-block;
+}
+
+.medium-emoji {
+  font-size: 1.5rem; /* Medium emoji for messages with several emojis */
+  line-height: 1.2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+
+.medium-emoji span {
+  display: inline-block;
+}
+
+/* Add animation (optional) */
+/* @keyframes emojiPop {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.emoji-pop {
+  animation: emojiPop 0.2s ease-out forwards;
+} */

@@ -4,7 +4,7 @@ import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// Auto linking function that is careful about markdown links
+// URL auto-linking function (kept the same)
 const autoLinkUrls = (text: string): string => {
   // If the text already contains markdown links, don't process it further
   if (text.match(/\[.+?\]\(.+?\)/)) {
@@ -16,22 +16,85 @@ const autoLinkUrls = (text: string): string => {
   return text.replace(urlRegex, (url) => `[${url}](${url})`);
 };
 
-// MessageContent component
-const MessageContent = memo(({ content }: { content: string }) => {
-  // Process the content to auto-link URLs
-  const processedContent = autoLinkUrls(content);
+// Emoji detection helpers
+const isEmoji = (str: string): boolean => {
+  // This regex matches most emoji patterns, including ZWJ sequences, skin tones, etc.
+  const emojiRegex = /^(\p{Emoji}|\p{Emoji_Presentation}|\p{Extended_Pictographic})+$/u;
+  return emojiRegex.test(str.trim());
+};
+
+const isEmojiOnly = (text: string): boolean => {
+  // First, trim whitespace and check if the string is empty
+  const trimmed = text.trim();
+  if (!trimmed) return false;
   
+  // Try to match the entire string against our emoji regex
+  // This regex allows emojis and whitespace only
+  const emojiRegex = /^(\p{Emoji}|\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u;
+  return emojiRegex.test(trimmed);
+};
+
+const splitEmojis = (text: string): string[] => {
+  // Split a string of emojis into an array of individual emoji characters
+  // This uses Array.from() to properly handle emoji that use multiple code points
+  return Array.from(text.trim());
+};
+
+const countEmojis = (text: string): number => {
+  // Count how many emoji are in the text
+  return splitEmojis(text).filter(char => isEmoji(char)).length;
+};
+
+const MessageContent = memo(({ content }: { content: string }) => {
+  // First, check if the message is emoji-only
+  const isOnlyEmojis = isEmojiOnly(content);
+  const emojiCount = isOnlyEmojis ? countEmojis(content) : 0;
+  
+  // Process content through auto-linking only if it's not emoji-only
+  const processedContent = isOnlyEmojis ? content : autoLinkUrls(content);
+  
+  // If message is emoji-only, render it differently
+  if (isOnlyEmojis) {
+    const emojis = splitEmojis(content);
+    
+    // Use large format if few emojis (1-3), medium if more (4-7), or normal if many
+    if (emojiCount <= 3) {
+      return (
+        <div className="markdown-content">
+          <div className="large-emoji">
+            {emojis.map((emoji, index) => (
+              <span key={index} className="emoji-pop">
+                {emoji}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    } else if (emojiCount <= 7) {
+      return (
+        <div className="markdown-content">
+          <div className="medium-emoji">
+            {emojis.map((emoji, index) => (
+              <span key={index} className="emoji-pop">
+                {emoji}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    // More than 7 emojis falls through to normal rendering
+  }
+  
+  // For regular messages or lots of emojis, use normal ReactMarkdown rendering
   return (
     <div className="markdown-content">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          // Link handler
           a: ({ node, href, children, ...props }) => {
-            // Make sure we have an href
             if (!href) return <a {...props}>{children}</a>;
             
-            // Handler to prevent default Next.js routing
             const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
               e.preventDefault();
               window.open(href, '_blank', 'noopener,noreferrer');
