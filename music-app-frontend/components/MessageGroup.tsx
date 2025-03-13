@@ -1,13 +1,56 @@
-// components/MessageGroup.tsx
+// For MessageGroup.tsx
+
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-// MessageContent component for rendering markdown content
+// Auto linking function that is careful about markdown links
+const autoLinkUrls = (text: string): string => {
+  // If the text already contains markdown links, don't process it further
+  if (text.match(/\[.+?\]\(.+?\)/)) {
+    return text;
+  }
+  
+  // Only convert plain URLs that aren't already part of a markdown link
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+};
+
+// MessageContent component
 const MessageContent = memo(({ content }: { content: string }) => {
+  // Process the content to auto-link URLs
+  const processedContent = autoLinkUrls(content);
+  
   return (
     <div className="markdown-content">
-      <ReactMarkdown>
-        {content}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Link handler
+          a: ({ node, href, children, ...props }) => {
+            // Make sure we have an href
+            if (!href) return <a {...props}>{children}</a>;
+            
+            // Handler to prevent default Next.js routing
+            const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+              e.preventDefault();
+              window.open(href, '_blank', 'noopener,noreferrer');
+            };
+            
+            return (
+              <a
+                {...props}
+                href={href}
+                onClick={handleClick}
+                className="text-blue-400 hover:underline"
+              >
+                {children}
+              </a>
+            );
+          }
+        }}
+      >
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
@@ -34,6 +77,7 @@ interface MessageGroupProps {
   formatTimeOnly: (timestamp: number) => string;
 }
 
+// The main MessageGroup component
 function MessageGroup({
   authorClientId,
   authorUsername,
