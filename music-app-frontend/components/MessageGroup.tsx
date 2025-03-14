@@ -1,10 +1,10 @@
-// For MessageGroup.tsx
-
+// components/MessageGroup.tsx
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { convertEmojiShortcodes } from '../utils/emojiShortcodes';
 
-// URL auto-linking function (kept the same)
+// URL auto-detection function
 const autoLinkUrls = (text: string): string => {
   // If the text already contains markdown links, don't process it further
   if (text.match(/\[.+?\]\(.+?\)/)) {
@@ -45,17 +45,23 @@ const countEmojis = (text: string): number => {
   return splitEmojis(text).filter(char => isEmoji(char)).length;
 };
 
+// MessageContent component
 const MessageContent = memo(({ content }: { content: string }) => {
-  // First, check if the message is emoji-only
-  const isOnlyEmojis = isEmojiOnly(content);
-  const emojiCount = isOnlyEmojis ? countEmojis(content) : 0;
+  // First convert any emoji shortcodes to actual emojis
+  const contentWithEmojis = convertEmojiShortcodes(content);
+  
+  // Then check if the result is emoji-only
+  const isOnlyEmojis = isEmojiOnly(contentWithEmojis);
+  const emojiCount = isOnlyEmojis ? countEmojis(contentWithEmojis) : 0;
   
   // Process content through auto-linking only if it's not emoji-only
-  const processedContent = isOnlyEmojis ? content : autoLinkUrls(content);
+  const processedContent = isOnlyEmojis 
+    ? contentWithEmojis 
+    : autoLinkUrls(contentWithEmojis);
   
-  // If message is emoji-only, render it differently
+  // Special rendering for emoji-only messages
   if (isOnlyEmojis) {
-    const emojis = splitEmojis(content);
+    const emojis = splitEmojis(contentWithEmojis);
     
     // Use large format if few emojis (1-3), medium if more (4-7), or normal if many
     if (emojiCount <= 3) {
@@ -92,9 +98,12 @@ const MessageContent = memo(({ content }: { content: string }) => {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Link handler
           a: ({ node, href, children, ...props }) => {
+            // Make sure we have an href
             if (!href) return <a {...props}>{children}</a>;
             
+            // Handler to prevent default Next.js routing
             const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
               e.preventDefault();
               window.open(href, '_blank', 'noopener,noreferrer');
