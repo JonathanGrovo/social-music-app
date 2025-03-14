@@ -118,73 +118,73 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
     }
   }, [showEmojiPicker, adjustHeight, textareaRef]);
   
-// Function to check for partial shortcodes in text as the user types
-const checkForShortcodes = (text: string, cursorPosition: number) => {
-  // If there's no text, clear suggestions
-  if (!text) {
-    setShortcodeSuggestions([]);
-    setCurrentShortcode('');
-    return;
-  }
-  
-  // Get the text up to the cursor
-  const textToCursor = text.substring(0, cursorPosition);
-  
-  // Use a regex that ensures the colon is either at the start of the text
-  // or has a space before it (Discord-like behavior)
-  const match = textToCursor.match(/(^|[\s]):([a-zA-Z0-9_+-]*)$/);
-  
-  if (match) {
-    // Get the partial shortcode (including the starting colon)
-    const partial = ':' + match[2].toLowerCase();
-    setCurrentShortcode(partial);
-    
-    // Get start and end positions for replacement later
-    // start should include the colon
-    const start = cursorPosition - match[2].length - 1;
-    const end = cursorPosition;
-    setShortcodePosition({ start, end });
-    
-    // Only search if we have at least 2 characters after the colon
-    if (partial.length > 2) {
-      // Find shortcodes that match the partial
-      const allShortcodes = Object.keys(emojiShortcodes);
-      const partialWithoutColon = partial.substring(1);
-      
-      // Find shortcodes containing the search term anywhere in the string
-      const matches = allShortcodes.filter(code => 
-        code.toLowerCase().includes(partialWithoutColon)
-      );
-      
-      // Sort matches: first those that start with the search term, then others
-      const sortedMatches = matches.sort((a, b) => {
-        const aStarts = a.toLowerCase().startsWith(':' + partialWithoutColon);
-        const bStarts = b.toLowerCase().startsWith(':' + partialWithoutColon);
-        
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-        return 0;
-      });
-      
-      // Cap the number of suggestions at 50
-      const cappedMatches = sortedMatches.slice(0, 50);
-      
-      // Show all matching emojis within our cap, but limit max height with CSS
-      setShortcodeSuggestions(cappedMatches);
-      setSelectedSuggestionIndex(0); // Reset the selection index
-    } else {
-      // Not enough characters, clear suggestions
+  // Function to check for partial shortcodes in text as the user types
+  const checkForShortcodes = useCallback((text: string, cursorPosition: number) => {
+    // If there's no text, clear suggestions
+    if (!text) {
       setShortcodeSuggestions([]);
+      setCurrentShortcode('');
+      return;
     }
-  } else {
-    // No partial shortcode found
-    setShortcodeSuggestions([]);
-    setCurrentShortcode('');
-  }
-};
+    
+    // Get the text up to the cursor
+    const textToCursor = text.substring(0, cursorPosition);
+    
+    // Use a regex that ensures the colon is either at the start of the text
+    // or has a space before it (Discord-like behavior)
+    const match = textToCursor.match(/(^|[\s]):([a-zA-Z0-9_+-]*)$/);
+    
+    if (match) {
+      // Get the partial shortcode (including the starting colon)
+      const partial = ':' + match[2].toLowerCase();
+      setCurrentShortcode(partial);
+      
+      // Get start and end positions for replacement later
+      // start should include the colon
+      const start = cursorPosition - match[2].length - 1;
+      const end = cursorPosition;
+      setShortcodePosition({ start, end });
+      
+      // Only search if we have at least 2 characters after the colon
+      if (partial.length > 2) {
+        // Find shortcodes that match the partial
+        const allShortcodes = Object.keys(emojiShortcodes);
+        const partialWithoutColon = partial.substring(1);
+        
+        // Find shortcodes containing the search term anywhere in the string
+        const matches = allShortcodes.filter(code => 
+          code.toLowerCase().includes(partialWithoutColon)
+        );
+        
+        // Sort matches: first those that start with the search term, then others
+        const sortedMatches = matches.sort((a, b) => {
+          const aStarts = a.toLowerCase().startsWith(':' + partialWithoutColon);
+          const bStarts = b.toLowerCase().startsWith(':' + partialWithoutColon);
+          
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return 0;
+        });
+        
+        // Cap the number of suggestions at 50
+        const cappedMatches = sortedMatches.slice(0, 50);
+        
+        // Show matching emojis, but limit max height with CSS
+        setShortcodeSuggestions(cappedMatches);
+        setSelectedSuggestionIndex(0); // Reset the selection index
+      } else {
+        // Not enough characters, clear suggestions
+        setShortcodeSuggestions([]);
+      }
+    } else {
+      // No partial shortcode found
+      setShortcodeSuggestions([]);
+      setCurrentShortcode('');
+    }
+  }, []);
   
   // Function to apply the selected shortcode suggestion
-  const selectShortcodeSuggestion = (shortcode: string) => {
+  const selectShortcodeSuggestion = useCallback((shortcode: string) => {
     if (textareaRef.current) {
       const text = textareaRef.current.value;
       const newText = 
@@ -215,7 +215,7 @@ const checkForShortcodes = (text: string, cursorPosition: number) => {
       // Adjust height if needed
       adjustHeight();
     }
-  };
+  }, [adjustHeight, shortcodePosition, textareaRef]);
   
   // Click away listener for emoji picker and suggestions
   useEffect(() => {
@@ -261,7 +261,26 @@ const checkForShortcodes = (text: string, cursorPosition: number) => {
     
     // Check for shortcodes at current cursor position
     checkForShortcodes(value, cursorPos);
-  }, []);
+  }, [checkForShortcodes]);
+
+  // Handle when the text area gets focus
+  const handleFocus = useCallback((e: React.FocusEvent<HTMLTextAreaElement>) => {
+    // Get the current cursor position
+    const cursorPos = e.target.selectionStart || 0;
+    
+    // Check for any potential shortcodes at the current cursor position
+    checkForShortcodes(e.target.value, cursorPos);
+  }, [checkForShortcodes]);
+
+  // Handle clicks inside the textarea (this catches repositioning of cursor)
+  const handleClick = useCallback((e: React.MouseEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    // Get the current cursor position after the click
+    const cursorPos = textarea.selectionStart || 0;
+    
+    // Check for any potential shortcodes at the new cursor position
+    checkForShortcodes(textarea.value, cursorPos);
+  }, [checkForShortcodes]);
 
   // Handle send message
   const handleSend = useCallback(() => {
@@ -365,7 +384,7 @@ const checkForShortcodes = (text: string, cursorPosition: number) => {
       // Close emoji picker on Escape key
       setShowEmojiPicker(false);
     }
-  }, [handleSend, adjustHeight, showEmojiPicker, shortcodeSuggestions, selectedSuggestionIndex]);
+  }, [handleSend, adjustHeight, showEmojiPicker, shortcodeSuggestions, selectedSuggestionIndex, selectShortcodeSuggestion]);
   
   // Toggle emoji picker
   const toggleEmojiPicker = useCallback(() => {
@@ -405,6 +424,8 @@ const checkForShortcodes = (text: string, cursorPosition: number) => {
           ref={textareaRef}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
+          onClick={handleClick}
           className="flex-1 px-3 py-2.5 bg-transparent text-foreground border-none focus:outline-none placeholder:text-muted-foreground resize-none overflow-y-auto"
           style={{ 
             height: '44px',
