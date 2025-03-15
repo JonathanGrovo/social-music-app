@@ -3,6 +3,7 @@
 import { Server as HTTPServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { EventType } from '../types/socket';
+import dbService from '@/services/database';
 
 interface UserData {
   username: string;
@@ -59,12 +60,27 @@ export class SocketManager {
   // Helper method to get or create room state (PRIVATE)
   private getOrCreateRoomState(roomId: string, roomName?: string): RoomState {
     if (!this.roomStates.has(roomId)) {
+      // Create new room state
       this.roomStates.set(roomId, {
         roomName: roomName || '',
         queue: [],
-        chatHistory: [],
-        users: new Map<string, UserData>() // clientId -> UserData map
+        chatHistory: [],  // Initialize with empty array
+        users: new Map<string, UserData>()
       });
+      
+      // Asynchronously load chat history from database
+      // Note: This is an optimization for startup performance
+      // The complete history is loaded on-demand in SYNC_REQUEST
+      setTimeout(() => {
+        const roomState = this.roomStates.get(roomId);
+        if (roomState) {
+          const chatHistory = dbService.getRecentMessages(roomId, 100);
+          if (chatHistory.length > 0) {
+            console.log(`Loaded ${chatHistory.length} messages for room ${roomId} from database`);
+            roomState.chatHistory = chatHistory;
+          }
+        }
+      }, 0);
     }
     return this.roomStates.get(roomId)!;
   }
@@ -89,13 +105,25 @@ export class SocketManager {
       // Handle room joining
       socket.on(EventType.USER_JOIN, (data: { roomId: string; username: string; clientId?: string; avatarId?: string }) => {
         console.log('User joining room:', data);
-        // Support both old and new field names during transition
         const { roomId } = data;
         const username = data.username;
         const avatarId = data.avatarId || 'avatar1';
         
         // Use provided clientId or fall back to socket query param
         const userClientId = data.clientId || clientId;
+
+        // Check if room exists in database
+        if (!dbService.roomExists(roomId)) {
+          // Room doesn't exist, send error to client
+          socket.emit('error', {
+            message: 'Room not found or no longer available',
+            code: 'ROOM_NOT_FOUND'
+          });
+          return;
+        }
+
+        // Update room last active timestamp
+        dbService.touchRoom(roomId)
         
         // Join the socket.io room
         socket.join(roomId);
@@ -280,23 +308,30 @@ export class SocketManager {
         const { roomId, payload, timestamp, clientId } = message;
         const username = message.username
         const avatarId = message.avatarId || 'avatar1';
-        
-        // Add to persistent chat history
-        const roomState = this.getOrCreateRoomState(roomId);
-        roomState.chatHistory.push({
+
+        // Create message object
+        const messageObj = {
           username,
           content: payload.content,
           timestamp,
           clientId,
           avatarId
-        });
+        };
+
+        // Add to in-memory chat history
+        const roomState = this.getOrCreateRoomState(roomId);
+        roomState.chatHistory.push(messageObj);
         
-        // Limit chat history to prevent memory issues (last 100 messages)
+        
+        // Limit in-memory chat history to prevent memory issues (last 100 messages)
         if (roomState.chatHistory.length > 100) {
           roomState.chatHistory.shift();
         }
+
+        // Save to database
+        dbService.saveMessage(roomId, messageObj);
         
-        // Broadcast to all users in the room with full message details
+        // Broadcast to all users in the room
         this.io.to(roomId).emit(EventType.CHAT_MESSAGE, {
           roomId,
           username,
@@ -349,24 +384,28 @@ export class SocketManager {
         console.log('Sync request:', message);
         const { roomId } = message;
         
+        // Get room state
         const roomState = this.getOrCreateRoomState(roomId);
         
         // Calculate accurate current time if track is playing
         let currentTrack = roomState.currentTrack;
         if (currentTrack && currentTrack.isPlaying && currentTrack.timestamp) {
-          const elapsed = (Date.now() - currentTrack.timestamp) / 1000; // Convert to seconds
+          const elapsed = (Date.now() - currentTrack.timestamp) / 1000;
           currentTrack = {
             ...currentTrack,
             startTime: currentTrack.startTime + elapsed
           };
         }
         
-        // Convert users map to array of user info objects with consistent structure
+        // Load chat history from database instead of only relying on memory
+        const chatHistory = dbService.getRecentMessages(roomId, 100);
+        
+        // Convert users map to array
         const usersList = Array.from(roomState.users.entries()).map(([clientId, userData]) => 
           this.createUserObject(clientId, userData)
         );
         
-        // Send current state with chat history
+        // Send current state with chat history from database
         socket.emit(EventType.SYNC_RESPONSE, {
           roomId,
           username: 'server',
@@ -374,8 +413,9 @@ export class SocketManager {
           payload: {
             currentTrack,
             queue: roomState.queue,
-            chatHistory: roomState.chatHistory,
-            users: usersList
+            chatHistory: chatHistory, // Use database history
+            users: usersList,
+            roomName: roomState.roomName
           },
           timestamp: Date.now()
         });

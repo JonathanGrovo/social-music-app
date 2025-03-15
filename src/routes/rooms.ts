@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { validateRoomCreation } from '../middleware/validation';
 import { v4 as uuidv4 } from 'uuid';
 import { SocketManager } from '../config/socket';
+import dbService from '@/services/database';
 
 // We'll need to access the SocketManager instance from the server
 let socketManager: SocketManager;
@@ -47,18 +48,10 @@ router.get('/', (req, res) => {
 router.get('/:roomId', (req, res) => {
   const { roomId } = req.params;
   
-  if (!socketManager) {
-    return res.status(500).json({
-      error: {
-        message: 'Socket manager not initialized',
-        status: 500
-      }
-    });
-  }
+  // First check if room exists in database
+  const roomData = dbService.getRoom(roomId);
   
-  const roomState = socketManager.getRoomState(roomId);
-  
-  if (!roomState) {
+  if (!roomData) {
     return res.status(404).json({
       error: {
         message: 'Room not found',
@@ -66,19 +59,27 @@ router.get('/:roomId', (req, res) => {
       }
     });
   }
-
-  // Get room name from metadata if it exists
-  const roomName = roomState.roomName || 'Unnamed Room';
   
-  // Return room details
+  // If room exists in database but not in memory, recreate it
+  if (!socketManager.getRoomState(roomId)) {
+    socketManager.createRoom(roomId, roomData.name);
+  }
+  
+  // Get the in-memory room state (might still be undefined)
+  const roomState = socketManager.getRoomState(roomId);
+  
+  // Update last active timestamp
+  dbService.touchRoom(roomId);
+  
+  // Return room details with safe property access
   res.status(200).json({
     room: {
       id: roomId,
-      name: roomName,
+      name: roomData.name,
       users: socketManager.getRoomUsers(roomId),
-      userCount: roomState.users.size,
-      currentTrack: roomState.currentTrack,
-      queueLength: roomState.queue.length
+      userCount: roomState?.users?.size || 0,
+      currentTrack: roomState?.currentTrack || null,
+      queueLength: roomState?.queue?.length || 0
     }
   });
 });
@@ -89,6 +90,9 @@ router.post('/', validateRoomCreation, (req, res) => {
   
   // Generate a new room ID
   const roomId = uuidv4();
+  
+  // Save room to database
+  dbService.saveRoom(roomId, name);
   
   // Initialize room state in SocketManager
   if (socketManager) {

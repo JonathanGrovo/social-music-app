@@ -7,6 +7,7 @@ import { SocketManager } from './config/socket';
 import { AppError } from './types/error';
 import routes from './routes';
 import { setSocketManager } from './routes/rooms';
+import dbService from './services/database';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +53,14 @@ const server: Server = app.listen(PORT, () => {
 // Initialize Socket.IO
 const socketManager = new SocketManager(server);
 
+const activeRooms = dbService.getActiveRooms();
+console.log(`Initializing ${activeRooms.length} persisted rooms`);
+
+activeRooms.forEach(room => {
+  socketManager.createRoom(room.id, room.name);
+  console.log(`Initialized room: ${room.name} (${room.id})`);
+});
+
 // Connect SocketManager to routes
 setSocketManager(socketManager);
 
@@ -76,6 +85,15 @@ server.on('error', (error: NodeJS.ErrnoException) => {
 // Graceful shutdown handler
 const shutdownGracefully = () => {
   console.log('Shutting down gracefully...');
+  
+  // Close database connection
+  try {
+    dbService.close();
+    console.log('Database connection closed');
+  } catch (err) {
+    console.error('Error closing database connection', err);
+  }
+  
   server.close(() => {
     console.log('Server closed');
     process.exit(0);

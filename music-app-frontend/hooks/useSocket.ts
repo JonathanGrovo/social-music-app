@@ -114,15 +114,30 @@ export function useSocket(roomId: string, username: string, clientId: string, av
 
       // Special handling for chat history to ensure we don't lose messages
       if (updates.chatHistory !== undefined) {
-        // If we're getting a new chat history, make sure it's not empty before replacing
-        if (updates.chatHistory.length > 0 || prevState.chatHistory.length === 0) {
+        // Only update if we have more messages from the server
+        if (updates.chatHistory.length > prevState.chatHistory.length) {
           newState.chatHistory = updates.chatHistory;
+        } else if (updates.chatHistory.length > 0) {
+          // If server sends fewer messages but not empty, check if they're newer
+          const oldestNewMsg = updates.chatHistory[0]?.timestamp || 0;
+          const newestOldMsg = prevState.chatHistory[prevState.chatHistory.length - 1]?.timestamp || 0;
+          
+          if (oldestNewMsg > newestOldMsg) {
+            // If new messages are newer, append them
+            newState.chatHistory = [...prevState.chatHistory, ...updates.chatHistory];
+          } else if (updates.chatHistory.length < prevState.chatHistory.length * 0.5) {
+            // If we're losing more than half our messages, log warning and keep old
+            console.warn('Prevented replacing full chat history with smaller set', {
+              current: prevState.chatHistory.length,
+              new: updates.chatHistory.length
+            });
+          } else {
+            // In other cases, trust the server version
+            newState.chatHistory = updates.chatHistory;
+          }
         } else {
-          // Log a warning if we're about to replace chat with empty array
-          console.warn('Prevented replacing chat history with empty array', {
-            current: prevState.chatHistory.length,
-            new: updates.chatHistory.length
-          });
+          // Log warning if empty array
+          console.warn('Prevented replacing chat history with empty array');
         }
       }
       
