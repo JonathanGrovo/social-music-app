@@ -133,3 +133,9 @@ dist
 .DS_Store
 dist/
 build/
+
+# SQLite database files
+data/chatHistory.db
+*.db
+*.sqlite
+*.sqlite3

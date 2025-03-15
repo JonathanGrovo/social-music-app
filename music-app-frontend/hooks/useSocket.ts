@@ -112,32 +112,16 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       if (updates.currentTrack !== undefined) newState.currentTrack = updates.currentTrack;
       if (updates.roomName !== undefined) newState.roomName = updates.roomName;
 
-      // Special handling for chat history to ensure we don't lose messages
+      // Special handling for chat history
       if (updates.chatHistory !== undefined) {
-        // Only update if we have more messages from the server
-        if (updates.chatHistory.length > prevState.chatHistory.length) {
-          newState.chatHistory = updates.chatHistory;
-        } else if (updates.chatHistory.length > 0) {
-          // If server sends fewer messages but not empty, check if they're newer
-          const oldestNewMsg = updates.chatHistory[0]?.timestamp || 0;
-          const newestOldMsg = prevState.chatHistory[prevState.chatHistory.length - 1]?.timestamp || 0;
-          
-          if (oldestNewMsg > newestOldMsg) {
-            // If new messages are newer, append them
-            newState.chatHistory = [...prevState.chatHistory, ...updates.chatHistory];
-          } else if (updates.chatHistory.length < prevState.chatHistory.length * 0.5) {
-            // If we're losing more than half our messages, log warning and keep old
-            console.warn('Prevented replacing full chat history with smaller set', {
-              current: prevState.chatHistory.length,
-              new: updates.chatHistory.length
-            });
-          } else {
-            // In other cases, trust the server version
-            newState.chatHistory = updates.chatHistory;
-          }
-        } else {
-          // Log warning if empty array
-          console.warn('Prevented replacing chat history with empty array');
+        // If we're getting a new chat history, trust the server data
+        // The server should be retrieving the complete history from the database
+        newState.chatHistory = updates.chatHistory;
+        
+        // Optional: Keep a minimal check to prevent empty arrays if you're concerned
+        if (updates.chatHistory.length === 0 && prevState.chatHistory.length > 0) {
+          console.warn('Server sent empty chat history. Keeping existing messages.');
+          newState.chatHistory = prevState.chatHistory;
         }
       }
       
