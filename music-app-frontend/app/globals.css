@@ -39,24 +39,24 @@ body {
 }
 
 /* Add smooth transitions when switching themes */
-body, * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+body,
+* {
+  transition: background-color 0.3s ease, color 0.3s ease,
+    border-color 0.3s ease;
 }
 
-/* Better text wrapping for long usernames */
+/* Text handling utilities */
 .overflow-wrap-anywhere {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-/* Make truncation work properly */
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Prevent flex items from breaking layouts when content is too long */
 .min-w-0 {
   min-width: 0;
 }
@@ -131,11 +131,11 @@ body, * {
   margin: 0.5rem 0;
 }
 
-.markdown-content h1, 
-.markdown-content h2, 
-.markdown-content h3, 
-.markdown-content h4, 
-.markdown-content h5, 
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
 .markdown-content h6 {
   font-weight: bold;
   margin: 0.5rem 0;
@@ -153,39 +153,37 @@ body, * {
   font-size: 1.2rem;
 }
 
-.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
   font-size: 1.1rem;
 }
 
 /* Status indicator and room owner tooltips */
 .status-tooltip {
-  font-size: 0.75rem !important; /* Smaller text */
-  padding: 6px 8px !important; /* Smaller padding */
+  font-size: 0.75rem !important;
+  padding: 6px 8px !important;
   opacity: 1 !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  max-width: 120px !important; /* Limit the width */
+  max-width: 120px !important;
   text-align: center !important;
   animation: fadeIn 0.1s ease-in-out;
   transition: opacity 0.1s ease-out, visibility 0s !important;
 }
 
-/* Add a specific cursor for the tooltip triggers */
 .status-tooltip-trigger {
   cursor: inherit;
-  -webkit-tap-highlight-color: transparent; /* Removes highlight on mobile tap */
-  user-select: none; /* Prevents text selection */
-  outline: none !important; /* Removes outline on focus/click */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  outline: none !important;
 }
 
-/* Prevent default focus styling for tooltip triggers */
 .status-tooltip-trigger:focus {
   outline: none !important;
   box-shadow: none !important;
 }
 
 /* SCROLLBAR STYLING */
-
-/* Custom scrollbar styling for the entire app */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -212,8 +210,14 @@ body, * {
 
 /* Animation for fade in effect */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px) translateX(-50%); }
-  to { opacity: 1; transform: translateY(0) translateX(-50%); }
+  from {
+    opacity: 0;
+    transform: translateY(10px) translateX(-50%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(-50%);
+  }
 }
 
 .animate-fadeIn {
@@ -226,24 +230,27 @@ body, * {
   scroll-behavior: smooth;
 }
 
-/* EMOJI PICKER STYLING file */
-
-
-
-/* Position the emoji picker container */
+/* EMOJI PICKER STYLING */
 .emoji-picker-container {
   position: fixed !important;
   z-index: 1000 !important;
-  /* The positioning will be handled in JavaScript */
+  opacity: 0; /* Start invisible */
+  transition: none !important; /* Remove the transition effect */
 }
 
-/* Ensure the selected category indicator is visible */
+.emoji-picker-container.positioned {
+  opacity: 1; /* Appear instantly */
+}
+
+emoji-picker {
+  transition: none !important;
+}
+
 emoji-picker nav.tabs button.selected {
   border-bottom: 3px solid var(--primary) !important;
   color: var(--primary) !important;
 }
 
-/* Enhance category navigation */
 emoji-picker .emoji-menu button {
   color: var(--secondary-text-color) !important;
 }
@@ -253,32 +260,22 @@ emoji-picker .emoji-menu button.selected {
   background-color: var(--hover-background) !important;
 }
 
-/* Prevents emoji picker flash */
-
-/* Update this in your globals.css file */
-.emoji-picker-container {
-  opacity: 0; /* Start invisible */
-  transition: none !important; /* Remove the transition effect */
+/* EMOJI STYLING - Consolidated */
+img.emoji {
+  display: inline-block !important;
+  height: 1.2em !important;
+  width: 1.2em !important;
+  margin: 0 0.1em !important;
+  vertical-align: -0.2em !important;
+  background: none !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-.emoji-picker-container.positioned {
-  opacity: 1; /* Appear instantly */
-}
-
-/* Also ensure no transitions are applied to the emoji-picker element itself */
-emoji-picker {
-  transition: none !important;
-}
-
-/* FIREFOX EMOJI STYLING */
-
-
-
-/* LARGER EMOJI FORMATTING */
-
-/* Add these to your app/globals.css file */
+/* Emoji sizing for emoji-only messages */
 .large-emoji {
-  font-size: 2rem; /* Larger emoji size */
+  font-size: 2rem;
   line-height: 1.2;
   display: flex;
   flex-wrap: wrap;
@@ -289,8 +286,14 @@ emoji-picker {
   display: inline-block;
 }
 
+.large-emoji img.emoji {
+  height: 3rem !important;
+  width: 3rem !important;
+  margin: 0.2rem !important;
+}
+
 .medium-emoji {
-  font-size: 1.5rem; /* Medium emoji for messages with several emojis */
+  font-size: 1.5rem;
   line-height: 1.2;
   display: flex;
   flex-wrap: wrap;
@@ -301,22 +304,36 @@ emoji-picker {
   display: inline-block;
 }
 
-/* Add animation (optional) */
-/* @keyframes emojiPop {
-  0% { transform: scale(0.8); opacity: 0.7; }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); opacity: 1; }
+.medium-emoji img.emoji {
+  height: 2rem !important;
+  width: 2rem !important;
+  margin: 0.1rem !important;
 }
 
-.emoji-pop {
-  animation: emojiPop 0.2s ease-out forwards;
-} */
+/* For Chrome - prevent broken image icon */
+img.emoji[src=""],
+img.emoji:not([src]) {
+  opacity: 0;
+  visibility: hidden;
+}
 
-/* EMOJICODE SUGGESTION DROPDOWN STYLING */
+/* Ensure emoji wrapper behaves like inline text */
+.emoji-wrapper {
+  display: inline-flex;
+  vertical-align: middle;
+  line-height: 1;
+}
 
-/* Simplified Discord-like emoji suggestion dropdown styling */
+/* Ensure line breaks don't separate emoji from text */
+.markdown-content div {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* EMOJI SUGGESTION DROPDOWN STYLING */
 .emoji-suggestion-dropdown {
-  background-color: #232428; /* Adjusted to a slightly lighter dark background */
+  background-color: #232428;
   border: 1px solid #4f545c;
   border-radius: 4px;
   overflow: hidden;
@@ -356,26 +373,16 @@ emoji-picker {
   scrollbar-color: #4a4d53 transparent;
 }
 
-/* Make sure suggestions scroll properly with keyboard navigation */
+/* Suggestion item styling */
 .emoji-suggestion-item {
   scroll-margin-top: 5px;
   scroll-margin-bottom: 5px;
-}
-
-/* Completely remove transitions for instant effect */
-.emoji-suggestion-item {
   transition: none !important;
 }
 
-/* Darker highlight color for hover - with !important to override any inline styles */
 .emoji-suggestion-item:hover,
 .emoji-suggestion-item.selected {
   background-color: #3c3f45 !important;
-}
-
-/* Override any potential transition styles that might be inherited */
-.emoji-suggestion-item, .emoji-suggestion-item:hover {
-  transition-property: none !important;
 }
 
 /* Hide scrollbar buttons */
@@ -389,91 +396,4 @@ emoji-picker {
   top: 0;
   z-index: 2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-/* GLOBAL EMOJI STYLING */
-
-/* Add this to your app/globals.css file */
-
-/* Twemoji styling */
-img.emoji {
-  height: 1.2em;
-  width: 1.2em;
-  margin: 0 .05em 0 .1em;
-  vertical-align: -0.2em;
-  display: inline !important;
-  border: none !important;
-  box-shadow: none !important;
-  background: none !important;
-  padding: 0 !important;
-}
-
-/* Styling for larger emoji */
-.large-emoji img.emoji {
-  height: 2.5rem !important;
-  width: 2.5rem !important;
-  margin: 0.2rem !important;
-  vertical-align: middle !important;
-}
-
-.medium-emoji img.emoji {
-  height: 1.8rem !important;
-  width: 1.8rem !important;
-  margin: 0.1rem !important;
-  vertical-align: middle !important;
-}
-
-/* For Chrome - prevent broken image icon */
-img.emoji[src=""], 
-img.emoji:not([src]) {
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* Add these styles to your globals.css file */
-
-/* Base emoji styling */
-img.emoji {
-  display: inline-block !important;
-  height: 1.2em !important;
-  width: 1.2em !important;
-  margin: 0 0.1em !important;
-  vertical-align: -0.2em !important;
-  background: none !important;
-  padding: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Emoji sizing for emoji-only messages */
-.large-emoji img.emoji {
-  height: 3rem !important;
-  width: 3rem !important;
-  margin: 0.2rem !important;
-}
-
-.medium-emoji img.emoji {
-  height: 2rem !important;
-  width: 2rem !important;
-  margin: 0.1rem !important;
-}
-
-/* Fix any potential overflow issues in chat container */
-.chat-messages-container img.emoji {
-  max-height: 3rem;
-  max-width: 3rem;
-}
-
-/* Ensure emoji wrapper behaves like inline text */
-.emoji-wrapper {
-  display: inline-flex;
-  vertical-align: middle;
-  line-height: 1;
-}
-
-/* Ensure line breaks don't separate emoji from text */
-.markdown-content div {
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: break-word;
 }
