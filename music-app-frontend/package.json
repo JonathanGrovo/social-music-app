@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-emojis": "ts-node scripts/generate-supported-emojis.ts"
   },
   "dependencies": {
     "emoji-picker-element": "^1.18.3",

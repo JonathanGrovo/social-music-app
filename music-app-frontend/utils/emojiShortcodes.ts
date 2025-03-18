@@ -1,5 +1,5 @@
 // utils/emojiShortcodes.ts
-import emojiDataByGroup from 'unicode-emoji-json/data-by-group.json';
+import supportedEmojiData from './supportedEmojiData.json';
 
 export type EmojiMapping = {
   [key: string]: string;
@@ -55,7 +55,7 @@ function buildEmojiShortcodes(): EmojiMapping {
   }
   
   // Start processing the data
-  processEmojiObject(emojiDataByGroup);
+  processEmojiObject(supportedEmojiData);
   
   // Add some common aliases and variations that people often use
   // But only if they don't already exist or produce the same emoji
