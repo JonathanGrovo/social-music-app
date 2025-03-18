@@ -1,3 +1,5 @@
+// In app/layout.tsx
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -13,6 +15,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Update metadata without using the unsupported other property
 export const metadata: Metadata = {
   title: "Social Music App",
   description: "Listen to music together with friends",
@@ -25,6 +28,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        {/* Remove all emoji preload links */}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

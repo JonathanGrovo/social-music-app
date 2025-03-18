@@ -117,6 +117,36 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
       };
     }
   }, [showEmojiPicker, adjustHeight, textareaRef]);
+
+  // Adjusts horizontal position of emoji picker on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (showEmojiPicker && textareaRef.current && emojiPickerRef.current) {
+        const textareaRect = textareaRef.current.getBoundingClientRect();
+        const pickerElement = emojiPickerRef.current;
+        
+        // Update position based on current textarea position
+        pickerElement.style.bottom = `${window.innerHeight - textareaRect.top + 10}px`;
+        pickerElement.style.left = `${textareaRect.left}px`;
+        
+        // Ensure the picker doesn't go off-screen
+        const rightEdge = parseFloat(pickerElement.style.left) + 352;
+        if (rightEdge > window.innerWidth) {
+          pickerElement.style.left = `${window.innerWidth - 352 - 10}px`;
+        }
+      }
+    };
+    
+    // Add event listener when picker is showing
+    if (showEmojiPicker) {
+      window.addEventListener('resize', handleResize);
+    }
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [showEmojiPicker, textareaRef, emojiPickerRef]);
   
   // Function to check for partial shortcodes in text as the user types
   const checkForShortcodes = useCallback((text: string, cursorPosition: number) => {
@@ -386,17 +416,51 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
     }
   }, [handleSend, adjustHeight, showEmojiPicker, shortcodeSuggestions, selectedSuggestionIndex, selectShortcodeSuggestion]);
   
-  // Toggle emoji picker
   const toggleEmojiPicker = useCallback(() => {
-    setShowEmojiPicker(prev => !prev);
-    
-    // Focus the textarea after a delay to ensure cursor position is maintained
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-      }
-    }, 0);
-  }, [textareaRef]);
+    // Force re-render of the picker when showing
+    if (showEmojiPicker) {
+      setShowEmojiPicker(false);
+      // Wait a tick before hiding to ensure clean transition
+      setTimeout(() => {
+        if (emojiPickerRef.current) {
+          emojiPickerRef.current.classList.remove('positioned');
+        }
+      }, 0);
+    } else {
+      setShowEmojiPicker(true);
+      
+      // Position immediately 
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        const emojiPickerContainer = emojiPickerRef.current;
+        
+        if (textarea && emojiPickerContainer) {
+          const textareaRect = textarea.getBoundingClientRect();
+          
+          // Position picker
+          emojiPickerContainer.style.bottom = `${window.innerHeight - textareaRect.top + 10}px`;
+          emojiPickerContainer.style.left = `${textareaRect.left}px`;
+          
+          // Adjust for screen edges
+          const rightEdge = parseFloat(emojiPickerContainer.style.left) + 352;
+          if (rightEdge > window.innerWidth) {
+            emojiPickerContainer.style.left = `${window.innerWidth - 352 - 10}px`;
+          }
+          
+          // Make visible immediately
+          emojiPickerContainer.classList.add('positioned');
+          
+          // Force refresh of emoji picker in Firefox
+          if (navigator.userAgent.indexOf('Firefox') !== -1) {
+            const pickerElement = emojiPickerContainer.querySelector('emoji-picker');
+            if (pickerElement) {
+              pickerElement.innerHTML = pickerElement.innerHTML;
+            }
+          }
+        }
+      });
+    }
+  }, [showEmojiPicker, textareaRef]);
 
   return (
     <div className="px-4 pb-4">
@@ -404,13 +468,13 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
       {showEmojiPicker && (
         <div 
           ref={emojiPickerRef}
-          className="fixed bottom-16 right-4 z-50 rounded-lg overflow-hidden"
+          className="emoji-picker-container"
           style={{ 
-            transform: 'translateZ(0)',
-            contain: 'layout paint style'
+            position: 'fixed',
+            zIndex: 1000,
+            width: '352px'
           }}
         >
-          {/* Use createElement instead of JSX for the custom element */}
           {React.createElement('emoji-picker', {
             ref: pickerRef,
             class: 'dark-theme',

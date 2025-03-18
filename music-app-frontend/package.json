@@ -19,6 +19,7 @@
     "react-tooltip": "^5.28.0",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
+    "twemoji": "^14.0.2",
     "unicode-emoji-json": "^0.8.0",
     "zustand": "^5.0.3"
   },
@@ -28,6 +29,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/twemoji": "^13.1.2",
     "eslint": "^9",
     "eslint-config-next": "15.1.7",
     "postcss": "^8",

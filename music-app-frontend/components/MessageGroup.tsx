@@ -1,8 +1,7 @@
-// components/MessageGroup.tsx
+// components/MessageContent.tsx
 import { memo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { convertEmojiShortcodes } from '../utils/emojiShortcodes';
+import twemoji from 'twemoji';
 
 // URL auto-detection function
 const autoLinkUrls = (text: string): string => {
@@ -13,7 +12,10 @@ const autoLinkUrls = (text: string): string => {
   
   // Only convert plain URLs that aren't already part of a markdown link
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+  return text.replace(urlRegex, (url) => {
+    // Use a format that works with our dangerouslySetInnerHTML approach
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">${url}</a>`;
+  });
 };
 
 // Emoji detection helpers
@@ -45,8 +47,12 @@ const countEmojis = (text: string): number => {
   return splitEmojis(text).filter(char => isEmoji(char)).length;
 };
 
-// MessageContent component
-const MessageContent = memo(({ content }: { content: string }) => {
+interface MessageContentProps {
+  content: string;
+}
+
+// Enhanced MessageContent component with optimized Twemoji rendering
+const MessageContent = memo(({ content }: MessageContentProps) => {
   // First convert any emoji shortcodes to actual emojis
   const contentWithEmojis = convertEmojiShortcodes(content);
   
@@ -59,77 +65,49 @@ const MessageContent = memo(({ content }: { content: string }) => {
     ? contentWithEmojis 
     : autoLinkUrls(contentWithEmojis);
   
-  // Special rendering for emoji-only messages
+  // For emoji-only messages, use Twemoji's parser but with different CSS classes for sizing
   if (isOnlyEmojis) {
-    const emojis = splitEmojis(contentWithEmojis);
+    const htmlContent = twemoji.parse(processedContent, {
+      folder: 'svg',
+      ext: '.svg',
+      base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
+    });
     
-    // Use large format if few emojis (1-3), medium if more (4-7), or normal if many
+    // Add the appropriate size class
     if (emojiCount <= 3) {
       return (
         <div className="markdown-content">
-          <div className="large-emoji">
-            {emojis.map((emoji, index) => (
-              <span key={index} className="emoji-pop">
-                {emoji}
-              </span>
-            ))}
-          </div>
+          <div className="large-emoji" dangerouslySetInnerHTML={{ __html: htmlContent }} />
         </div>
       );
     } else if (emojiCount <= 7) {
       return (
         <div className="markdown-content">
-          <div className="medium-emoji">
-            {emojis.map((emoji, index) => (
-              <span key={index} className="emoji-pop">
-                {emoji}
-              </span>
-            ))}
-          </div>
+          <div className="medium-emoji" dangerouslySetInnerHTML={{ __html: htmlContent }} />
         </div>
       );
     }
-    // More than 7 emojis falls through to normal rendering
   }
   
-  // For regular messages or lots of emojis, use normal ReactMarkdown rendering
+  // For regular messages or many emojis, use the same Twemoji parsing
+  const htmlContent = twemoji.parse(processedContent, {
+    folder: 'svg',
+    ext: '.svg',
+    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
+  });
+  
   return (
     <div className="markdown-content">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Link handler
-          a: ({ node, href, children, ...props }) => {
-            // Make sure we have an href
-            if (!href) return <a {...props}>{children}</a>;
-            
-            // Handler to prevent default Next.js routing
-            const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-              e.preventDefault();
-              window.open(href, '_blank', 'noopener,noreferrer');
-            };
-            
-            return (
-              <a
-                {...props}
-                href={href}
-                onClick={handleClick}
-                className="text-blue-400 hover:underline"
-              >
-                {children}
-              </a>
-            );
-          }
-        }}
-      >
-        {processedContent}
-      </ReactMarkdown>
+      <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
     </div>
   );
 });
 
 // Add display name for debugging
 MessageContent.displayName = 'MessageContent';
+
+// Export as named export to avoid "multiple default exports" error
+export { MessageContent };
 
 // Types to match those in ChatBox
 interface Message {
