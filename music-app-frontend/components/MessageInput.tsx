@@ -5,6 +5,10 @@ import { useRef, useCallback, useState, memo, useEffect } from 'react';
 import useAutoResizeTextarea from '../hooks/useAutoResizeTextarea';
 import React from 'react';
 import { emojiShortcodes } from '../utils/emojiShortcodes';
+import twemoji from 'twemoji';
+import { isEmojiPreloaded } from '@/utils/emojiPreloader';
+import { TWEMOJI_BASE_URL } from '../utils/emojiConstants'; // Create this file
+
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
@@ -502,14 +506,17 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
         {shortcodeSuggestions.length > 0 && (
           <div 
             ref={suggestionRef}
-            className="emoji-suggestion-dropdown fixed z-50 shadow-xl" // Use fixed positioning and high z-index
+            className="emoji-suggestion-dropdown fixed z-50 shadow-xl"
             style={{ 
-              bottom: textareaRef.current ? 
-                windowPosition.height - textareaRef.current.getBoundingClientRect().top + 10 : '100px',
+                // Fixed positioning relative to the textarea
+                bottom: textareaRef.current ? 
+                window.innerHeight - textareaRef.current.getBoundingClientRect().top + 10 : '100px',
               left: textareaRef.current ? 
                 textareaRef.current.getBoundingClientRect().left : '10px',
-              width: '352px', // Static width as requested
-              backgroundColor: '#232428', // Slightly lighter dark background
+              // Fixed width
+              width: '352px', 
+              // Other styles
+              backgroundColor: '#232428',
               border: '1px solid #4f545c',
               borderRadius: '4px',
               overflow: 'hidden',
@@ -517,12 +524,12 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)'
             }}
           >
-            {/* Header showing what we're matching - with uppercase formatting */}
+            {/* Header showing what we're matching */}
             <div className="sticky top-0 px-2 py-1.5 border-b border-[#2c2e33] bg-[#1e2024] text-[#9a9c9e] text-xs uppercase tracking-wider font-medium">
               EMOJI MATCHING {currentShortcode && currentShortcode.substring(0, 1) + currentShortcode.substring(1).toUpperCase()}
             </div>
             
-            {/* Suggestion list - Discord style */}
+            {/* Suggestion list - with enhanced Twemoji rendering */}
             <ul 
               ref={suggestionListRef}
               className="max-h-72 overflow-y-auto emoji-suggestion-list hide-scrollbar-buttons"
@@ -536,8 +543,18 @@ function MessageInput({ onSendMessage, roomName = "the room" }: MessageInputProp
                   }`}
                   onClick={() => selectShortcodeSuggestion(code)}
                 >
-                  {/* Emoji and shortcode text only */}
-                  <span className="mr-2 text-base">{emojiShortcodes[code]}</span>
+                  {/* Use Twemoji to render the emoji */}
+                  <span 
+                    className="mr-2 text-base" 
+                    dangerouslySetInnerHTML={{ 
+                      __html: twemoji.parse(emojiShortcodes[code], {
+                        folder: 'svg',
+                        ext: '.svg',
+                        base: TWEMOJI_BASE_URL,
+                        className: 'emoji'
+                      })
+                    }}
+                  />
                   <span className="text-gray-200 flex-1 truncate">{code}</span>
                 </li>
               ))}

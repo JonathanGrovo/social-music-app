@@ -1,7 +1,10 @@
-// components/MessageContent.tsx
-import { memo } from 'react';
+// In components/MessageGroup.tsx - update the MessageContent component
+
+import { memo, useEffect, useState } from 'react';
 import { convertEmojiShortcodes } from '../utils/emojiShortcodes';
 import twemoji from 'twemoji';
+import { isEmojiPreloaded } from '../utils/emojiPreloader';
+import { preloadedEmojis as PRELOADED_EMOJIS } from '../utils/emojiPreloader';
 
 // URL auto-detection function
 const autoLinkUrls = (text: string): string => {
@@ -47,6 +50,42 @@ const countEmojis = (text: string): number => {
   return splitEmojis(text).filter(char => isEmoji(char)).length;
 };
 
+// Enhanced Twemoji parser that adds classes based on preload status
+const enhancedTwemojiParse = (text: string, emojiSize?: 'large' | 'medium'): string => {
+  return twemoji.parse(text, {
+    folder: 'svg',
+    ext: '.svg',
+    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/',
+    callback: (icon, options) => {
+      // Add classes based on preload status and size
+      const classNames = [];
+      
+      // Skip trying to convert to code point - just check if emoji has been preloaded
+      // This avoids the "Invalid code point NaN" error
+      try {
+        // For checking preloaded status, we use the full URL
+        const opts = options as any;
+        const url = `${opts.base}${opts.size}/svg/${icon}${opts.ext}`;
+        
+        // Check if this URL is in our preloaded set
+        if (PRELOADED_EMOJIS && PRELOADED_EMOJIS.has(url)) {
+          classNames.push('emoji-instant');
+        }
+      } catch (error) {
+        // Just ignore errors here - we'll use default animation
+        console.warn('Error checking emoji preload status', error);
+      }
+      
+      if (emojiSize) {
+        classNames.push(`emoji-${emojiSize}`);
+      }
+      
+      // Return the class names or false (not undefined)
+      return classNames.length ? classNames.join(' ') : false;
+    }
+  });
+};
+
 interface MessageContentProps {
   content: string;
 }
@@ -64,41 +103,53 @@ const MessageContent = memo(({ content }: MessageContentProps) => {
   const processedContent = isOnlyEmojis 
     ? contentWithEmojis 
     : autoLinkUrls(contentWithEmojis);
+
+  // Define a constant for the Twemoji base URL to ensure consistency
+  const TWEMOJI_BASE_URL = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/';
   
-  // For emoji-only messages, use Twemoji's parser but with different CSS classes for sizing
-  if (isOnlyEmojis) {
-    const htmlContent = twemoji.parse(processedContent, {
+  // Use a simpler and more reliable Twemoji implementation
+  const renderWithTwemoji = (text: string, emojiSize?: string) => {
+    const baseOptions = {
       folder: 'svg',
       ext: '.svg',
-      base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
-    });
+      base: TWEMOJI_BASE_URL,
+    };
     
-    // Add the appropriate size class
+    // Add size-specific class if needed
+    if (emojiSize) {
+      return twemoji.parse(text, {
+        ...baseOptions,
+        className: `emoji emoji-${emojiSize}`
+      });
+    }
+    
+    // Default parsing
+    return twemoji.parse(text, baseOptions);
+  };
+  
+  // For emoji-only messages, use different size classes
+  if (isOnlyEmojis) {
     if (emojiCount <= 3) {
       return (
         <div className="markdown-content">
-          <div className="large-emoji" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+          <div className="large-emoji" 
+               dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent, 'large') }} />
         </div>
       );
     } else if (emojiCount <= 7) {
       return (
         <div className="markdown-content">
-          <div className="medium-emoji" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+          <div className="medium-emoji" 
+               dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent, 'medium') }} />
         </div>
       );
     }
   }
   
-  // For regular messages or many emojis, use the same Twemoji parsing
-  const htmlContent = twemoji.parse(processedContent, {
-    folder: 'svg',
-    ext: '.svg',
-    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
-  });
-  
+  // For regular messages or many emojis
   return (
     <div className="markdown-content">
-      <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+      <div dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent) }} />
     </div>
   );
 });

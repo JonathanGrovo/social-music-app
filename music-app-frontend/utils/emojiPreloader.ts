@@ -1,20 +1,40 @@
 // utils/emojiPreloader.ts
 import twemoji from 'twemoji';
 
-// Common emojis to preload
-const COMMON_EMOJIS = [
-  '😀', '😂', '😊', '😍', '🥰', '😎', 
-  '👍', '❤️', '🔥', '✨', '🎉', '🙏',
-  '😭', '🥺', '👏', '💯', '🚀', '💪'
+// Top 50 most common emojis
+const TOP_EMOJIS = [
+  '😀', '😂', '😊', '😍', '🥰', '😎', '👍', '❤️', '🔥', '✨', '🎉', '🙏',
+  '😭', '🥺', '👏', '💯', '🚀', '💪', '👋', '🤔', '😅', '🙄', '😘', '😁',
+  '👀', '🤣', '🥲', '🤷', '😬', '😉', '🫶', '✅', '🙂', '💕', '😴', '🫡',
+  '🤗', '🤨', '🤦', '😢', '🥹', '🤩', '😳', '🤝', '😮', '😇', '😌', '🤯',
+  '🫠', '😱'
 ];
+
+// Emoji categories for background loading
+const EMOJI_CATEGORIES = {
+  faces: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '☺️', '😊', '😇', '😌', '😍', '🥰', '😘'],
+  hands: ['👍', '👎', '👊', '✊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✌️', '🤞', '🤟', '🤘'],
+  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖'],
+  nature: ['🌺', '🌸', '🌼', '🌻', '🌞', '🌝', '🌛', '🌜', '🌚', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓'],
+  food: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝'],
+  animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵']
+};
 
 // Keep track of preloaded emoji URLs
 const PRELOADED_EMOJIS = new Set<string>();
+// Keep track of currently loading emojis to prevent duplicates
+const LOADING_EMOJIS = new Set<string>();
+
+// Fix: Use a consistent Twemoji base URL with specific version
+const TWEMOJI_BASE_URL = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/';
 
 /**
  * Preload a single emoji image
  */
 async function preloadEmoji(emoji: string): Promise<void> {
+  if (LOADING_EMOJIS.has(emoji)) return;
+  LOADING_EMOJIS.add(emoji);
+  
   try {
     // Parse with Twemoji to get the URL
     let url: string | null = null;
@@ -24,12 +44,13 @@ async function preloadEmoji(emoji: string): Promise<void> {
       callback: function(icon, options) {
         // Cast options to any to avoid TypeScript errors with the library's types
         const opts = options as any;
-        url = `${opts.base}${opts.size}/svg/${icon}${opts.ext}`;
+        // Fix: Ensure correct URL structure (no double "svg/svg/")
+        url = `${TWEMOJI_BASE_URL}svg/${icon}.svg`;
         return false;
       },
       folder: 'svg',
       ext: '.svg',
-      base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
+      base: TWEMOJI_BASE_URL
     });
     
     if (!url) return;
@@ -44,45 +65,91 @@ async function preloadEmoji(emoji: string): Promise<void> {
         PRELOADED_EMOJIS.add(url!);
         resolve();
       };
-      img.onerror = () => resolve(); // Still resolve on error
+      img.onerror = () => {
+        console.error(`Failed to load emoji: ${emoji} (${url})`);
+        resolve(); // Still resolve on error
+      };
     });
     
     console.log(`Preloaded emoji: ${emoji}`);
   } catch (error) {
-    // Silently ignore errors during preloading
+    console.warn(`Error preloading emoji ${emoji}:`, error);
+  } finally {
+    LOADING_EMOJIS.delete(emoji);
   }
 }
 
 /**
- * Preload common emoji images in the background
+ * Preload top emojis immediately
  */
-export function preloadCommonEmojis(): void {
-  // Only run in the browser
-  if (typeof window === 'undefined') return;
+function preloadTopEmojis(): void {
+  console.log('Starting top emoji preloading...');
   
-  // Delay preloading to prioritize page loading
-  setTimeout(() => {
-    console.log('Starting emoji preloading...');
-    
-    // Preload each emoji with a small delay between each
-    COMMON_EMOJIS.forEach((emoji, index) => {
-      setTimeout(() => {
-        preloadEmoji(emoji);
-      }, index * 100); // 100ms delay between each preload
-    });
-  }, 2000); // Wait 2 seconds after page load
+  // Load top emojis with minimal delay
+  TOP_EMOJIS.forEach((emoji, index) => {
+    setTimeout(() => {
+      preloadEmoji(emoji);
+    }, index * 20); // Just 20ms between each to quickly load all
+  });
+}
+
+/**
+ * Preload emoji categories in the background
+ */
+function preloadEmojiCategories(): void {
+  console.log('Starting background category emoji preloading...');
+  
+  // Load categories with sufficient delays to not impact performance
+  Object.entries(EMOJI_CATEGORIES).forEach(([category, emojis], categoryIndex) => {
+    setTimeout(() => {
+      console.log(`Loading ${category} emoji category...`);
+      emojis.forEach((emoji, emojiIndex) => {
+        setTimeout(() => {
+          // Skip if already loaded from top emojis
+          if (!PRELOADED_EMOJIS.has(emoji) && !LOADING_EMOJIS.has(emoji)) {
+            preloadEmoji(emoji);
+          }
+        }, emojiIndex * 50); // 50ms between emojis in a category
+      });
+    }, categoryIndex * 3000); // 3 seconds between categories
+  });
 }
 
 /**
  * Check if an emoji URL has been preloaded
  */
-export function isEmojiPreloaded(url: string): boolean {
-  return PRELOADED_EMOJIS.has(url);
+export function isEmojiPreloaded(emoji: string): boolean {
+  let url: string | null = null;
+  
+  twemoji.parse(emoji, {
+    callback: function(icon, options) {
+      const opts = options as any;
+      url = `${opts.base}${opts.size}/svg/${icon}${opts.ext}`;
+      return false;
+    },
+    folder: 'svg',
+    ext: '.svg',
+    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/'
+  });
+  
+  return url ? PRELOADED_EMOJIS.has(url) : false;
 }
 
 /**
- * Get a cached emoji URL (for backward compatibility)
+ * Main function to initialize the emoji system
  */
-export function getCachedEmojiUrl(emoji: string): string | null {
-  return null; // No longer used, but kept for compatibility
+export function preloadCommonEmojis(): void {
+  // Only run in the browser
+  if (typeof window === 'undefined') return;
+  
+  // Immediate load of top emojis
+  preloadTopEmojis();
+  
+  // Delayed background loading of categories
+  setTimeout(() => {
+    preloadEmojiCategories();
+  }, 5000); // Wait 5 seconds after page load to start background loading
 }
+
+// Export the preloaded emojis set
+export const preloadedEmojis = PRELOADED_EMOJIS;
