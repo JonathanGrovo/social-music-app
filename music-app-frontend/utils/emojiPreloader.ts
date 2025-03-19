@@ -1,23 +1,27 @@
 // utils/emojiPreloader.ts
 import twemoji from 'twemoji';
 
-// Top 50 most common emojis
+// Updated list of emojis to preload based on your preferences
 const TOP_EMOJIS = [
-  '😀', '😂', '😊', '😍', '🥰', '😎', '👍', '❤️', '🔥', '✨', '🎉', '🙏',
-  '😭', '🥺', '👏', '💯', '🚀', '💪', '👋', '🤔', '😅', '🙄', '😘', '😁',
-  '👀', '🤣', '🥲', '🤷', '😬', '😉', '🫶', '✅', '🙂', '💕', '😴', '🫡',
-  '🤗', '🤨', '🤦', '😢', '🥹', '🤩', '😳', '🤝', '😮', '😇', '😌', '🤯',
-  '🫠', '😱'
+  '😂', '❤️', '🤣', '👍', '😭', '🙏', '😘', '🥰', '😍', '😊', 
+  '🎉', '😁', '💕', '🥺', '😅', '🔥', '☺️', '🤦', '♥️', '🤷',
+  '🙄', '😆', '🤗', '😉', '🎂', '🤔', '👏', '🙂', '😳', '🥳', 
+  '😎', '👌', '💜', '😔', '💪', '✨', '💖', '👀', '😋', '😏'
 ];
 
-// Emoji categories for background loading
+// Secondary tier of emojis (still important but loaded with slight delay)
+const SECONDARY_EMOJIS = [
+  '😢', '👉', '💗', '😩', '💯', '🌹', '💞', '🎈', '💙', '😃',
+  '😡', '💐', '😜', '🙈', '🤞', '😄', '🤤', '🙌', '🤪', '❣️',
+  '😀', '💋', '💀', '👇', '💔', '😌', '💓', '🤩', '🙃', '😬'
+];
+
+// Emoji categories for background loading - focused on music-related categories
 const EMOJI_CATEGORIES = {
-  faces: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '☺️', '😊', '😇', '😌', '😍', '🥰', '😘'],
-  hands: ['👍', '👎', '👊', '✊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✌️', '🤞', '🤟', '🤘'],
-  hearts: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖'],
-  nature: ['🌺', '🌸', '🌼', '🌻', '🌞', '🌝', '🌛', '🌜', '🌚', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓'],
-  food: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝'],
-  animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵']
+  music: ['🎵', '🎶', '🎸', '🎹', '🎺', '🎷', '🥁', '🎤', '🎧', '🎼', '🎙️', '🎚️', '🎛️', '📻', '🔈', '🔉'],
+  expressions: ['😱', '😴', '🤭', '😐', '🌞', '😒', '😇', '🌸', '😈', '✌️', '🎊', '🥵', '😞', '💚', '☀️', '🖤'],
+  popular: ['💰', '😚', '👑', '🎁', '💥', '🙋', '☹️', '😑', '🥴', '👈', '💩', '✅', '👋', '🤮', '😤', '🤢'],
+  extras: ['🌟', '❗', '😥', '🌈', '💛', '😝', '😫', '😲', '🖕', '‼️', '🔴', '🌻', '🤯', '💃', '👊', '🤬']
 };
 
 // Keep track of preloaded emoji URLs
@@ -91,6 +95,15 @@ function preloadTopEmojis(): void {
       preloadEmoji(emoji);
     }, index * 20); // Just 20ms between each to quickly load all
   });
+  
+  // Load secondary emojis with a slight delay after the top ones
+  setTimeout(() => {
+    SECONDARY_EMOJIS.forEach((emoji, index) => {
+      setTimeout(() => {
+        preloadEmoji(emoji);
+      }, index * 30); // 30ms between each secondary emoji
+    });
+  }, TOP_EMOJIS.length * 20 + 100); // Wait until top emojis are loaded
 }
 
 /**
@@ -105,7 +118,7 @@ function preloadEmojiCategories(): void {
       console.log(`Loading ${category} emoji category...`);
       emojis.forEach((emoji, emojiIndex) => {
         setTimeout(() => {
-          // Skip if already loaded from top emojis
+          // Skip if already loaded from top or secondary emojis
           if (!PRELOADED_EMOJIS.has(emoji) && !LOADING_EMOJIS.has(emoji)) {
             preloadEmoji(emoji);
           }
