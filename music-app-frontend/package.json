@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "emoji-picker-element": "^1.18.3",
+    "emoji-regex": "^10.4.0",
     "lodash": "^4.17.21",
     "next": "15.1.7",
     "react": "^19.0.0",

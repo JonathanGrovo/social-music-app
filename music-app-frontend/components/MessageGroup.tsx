@@ -1,10 +1,66 @@
-// In components/MessageGroup.tsx - update the MessageContent component
+// In components/MessageGroup.tsx
 
-import { memo, useEffect, useState } from 'react';
+import { memo, createElement } from 'react';
 import { convertEmojiShortcodes } from '../utils/emojiShortcodes';
 import twemoji from 'twemoji';
-import { isEmojiPreloaded } from '../utils/emojiPreloader';
-import { preloadedEmojis as PRELOADED_EMOJIS } from '../utils/emojiPreloader';
+import { TWEMOJI_BASE_URL } from '../utils/emojiConstants';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+// Define a common interface for markdown component props to avoid repetition
+interface MarkdownComponentProps {
+  node?: any;
+  children?: React.ReactNode;
+  [key: string]: any;
+}
+
+// Enhanced emoji detection - using a more advanced approach
+const emojiPattern = /\p{Emoji}/u;
+
+/**
+ * Check if text contains only emojis (plus optional whitespace)
+ */
+const isEmojiOnly = (text: string): boolean => {
+  if (!text || typeof text !== 'string') return false;
+  
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  
+  // Replace any variation selectors and ZWJ sequences to simplify the check
+  const simplified = trimmed
+    .replace(/\uFE0F/g, '') // Variation selector
+    .replace(/\u200D/g, ''); // Zero Width Joiner
+  
+  // Now check if there's anything other than emoji and whitespace
+  const nonEmojiMatch = simplified.match(/[^\p{Emoji}\s]/gu);
+  
+  // If we found non-emoji characters, it's not emoji-only
+  if (nonEmojiMatch) {
+    return false;
+  }
+  
+  // Get emoji count to make sure we have at least one
+  const emojiCount = countEmojis(simplified);
+  
+  // It's emoji-only if we have at least one emoji and nothing else
+  return emojiCount > 0;
+};
+
+/**
+ * Count distinct emojis in a string
+ */
+const countEmojis = (text: string): number => {
+  if (!text) return 0;
+  
+  // Handle variation selectors and ZWJ sequences
+  const simplified = text
+    .replace(/\uFE0F/g, '') // Variation selector
+    .replace(/\u200D/g, ''); // Zero Width Joiner
+  
+  // Simply count all emoji characters
+  const matches = simplified.match(/\p{Emoji}/gu);
+  return matches ? matches.length : 0;
+};
 
 // URL auto-detection function
 const autoLinkUrls = (text: string): string => {
@@ -16,149 +72,170 @@ const autoLinkUrls = (text: string): string => {
   // Only convert plain URLs that aren't already part of a markdown link
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.replace(urlRegex, (url) => {
-    // Use a format that works with our dangerouslySetInnerHTML approach
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">${url}</a>`;
+    return `[${url}](${url})`;
   });
 };
 
-// Emoji detection helpers
-const isEmoji = (str: string): boolean => {
-  // This regex matches most emoji patterns, including ZWJ sequences, skin tones, etc.
-  const emojiRegex = /^(\p{Emoji}|\p{Emoji_Presentation}|\p{Extended_Pictographic})+$/u;
-  return emojiRegex.test(str.trim());
+// Custom component to render text with Twemoji
+const TwemojiText = ({ children }: { children: React.ReactNode }) => {
+  if (typeof children !== 'string') {
+    return <>{children}</>;
+  }
+
+  return (
+    <span 
+      dangerouslySetInnerHTML={{
+        __html: twemoji.parse(children, {
+          folder: 'svg',
+          ext: '.svg',
+          base: TWEMOJI_BASE_URL,
+        }),
+      }}
+    />
+  );
 };
 
-const isEmojiOnly = (text: string): boolean => {
-  // First, trim whitespace and check if the string is empty
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  
-  // Try to match the entire string against our emoji regex
-  // This regex allows emojis and whitespace only
-  const emojiRegex = /^(\p{Emoji}|\p{Emoji_Presentation}|\p{Extended_Pictographic}|\s)+$/u;
-  return emojiRegex.test(trimmed);
-};
-
-const splitEmojis = (text: string): string[] => {
-  // Split a string of emojis into an array of individual emoji characters
-  // This uses Array.from() to properly handle emoji that use multiple code points
-  return Array.from(text.trim());
-};
-
-const countEmojis = (text: string): number => {
-  // Count how many emoji are in the text
-  return splitEmojis(text).filter(char => isEmoji(char)).length;
-};
-
-// Enhanced Twemoji parser that adds classes based on preload status
-const enhancedTwemojiParse = (text: string, emojiSize?: 'large' | 'medium'): string => {
-  return twemoji.parse(text, {
-    folder: 'svg',
-    ext: '.svg',
-    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/',
-    callback: (icon, options) => {
-      // Add classes based on preload status and size
-      const classNames = [];
-      
-      // Skip trying to convert to code point - just check if emoji has been preloaded
-      // This avoids the "Invalid code point NaN" error
-      try {
-        // For checking preloaded status, we use the full URL
-        const opts = options as any;
-        const url = `${opts.base}${opts.size}/svg/${icon}${opts.ext}`;
-        
-        // Check if this URL is in our preloaded set
-        if (PRELOADED_EMOJIS && PRELOADED_EMOJIS.has(url)) {
-          classNames.push('emoji-instant');
-        }
-      } catch (error) {
-        // Just ignore errors here - we'll use default animation
-        console.warn('Error checking emoji preload status', error);
-      }
-      
-      if (emojiSize) {
-        classNames.push(`emoji-${emojiSize}`);
-      }
-      
-      // Return the class names or false (not undefined)
-      return classNames.length ? classNames.join(' ') : false;
-    }
-  });
+// Helper function to create a component that renders its children with Twemoji
+const createTwemojiComponent = (Component: React.ElementType) => {
+  return ({ children, ...props }: MarkdownComponentProps) => (
+    <Component {...props}>
+      <TwemojiText>{children}</TwemojiText>
+    </Component>
+  );
 };
 
 interface MessageContentProps {
   content: string;
 }
 
-// Enhanced MessageContent component with optimized Twemoji rendering
+// Enhanced MessageContent component with markdown and emoji support
 const MessageContent = memo(({ content }: MessageContentProps) => {
   // First convert any emoji shortcodes to actual emojis
   const contentWithEmojis = convertEmojiShortcodes(content);
   
-  // Then check if the result is emoji-only
+  // Check if this is an emoji-only message
   const isOnlyEmojis = isEmojiOnly(contentWithEmojis);
   const emojiCount = isOnlyEmojis ? countEmojis(contentWithEmojis) : 0;
   
-  // Process content through auto-linking only if it's not emoji-only
-  const processedContent = isOnlyEmojis 
-    ? contentWithEmojis 
-    : autoLinkUrls(contentWithEmojis);
-
-  // Define a constant for the Twemoji base URL to ensure consistency
-  const TWEMOJI_BASE_URL = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/';
-  
-  // Use a simpler and more reliable Twemoji implementation
-  const renderWithTwemoji = (text: string, emojiSize?: string) => {
-    const baseOptions = {
-      folder: 'svg',
-      ext: '.svg',
-      base: TWEMOJI_BASE_URL,
-    };
-    
-    // Add size-specific class if needed
-    if (emojiSize) {
-      return twemoji.parse(text, {
-        ...baseOptions,
-        className: `emoji emoji-${emojiSize}`
-      });
-    }
-    
-    // Default parsing
-    return twemoji.parse(text, baseOptions);
-  };
-  
-  // For emoji-only messages, use different size classes
+  // For emoji-only messages, use different size classes and just Twemoji (no markdown)
   if (isOnlyEmojis) {
     if (emojiCount <= 3) {
       return (
         <div className="markdown-content">
           <div className="large-emoji" 
-               dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent, 'large') }} />
+               dangerouslySetInnerHTML={{ __html: twemoji.parse(contentWithEmojis, {
+                 folder: 'svg',
+                 ext: '.svg',
+                 base: TWEMOJI_BASE_URL
+               }) }} />
         </div>
       );
     } else if (emojiCount <= 7) {
       return (
         <div className="markdown-content">
           <div className="medium-emoji" 
-               dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent, 'medium') }} />
+               dangerouslySetInnerHTML={{ __html: twemoji.parse(contentWithEmojis, {
+                 folder: 'svg',
+                 ext: '.svg',
+                 base: TWEMOJI_BASE_URL
+               }) }} />
         </div>
       );
     }
   }
   
-  // For regular messages or many emojis
+  // For regular messages, convert URLs to markdown links if they're not already
+  const contentWithLinks = autoLinkUrls(contentWithEmojis);
+  
+  // Then use ReactMarkdown for rendering
   return (
     <div className="markdown-content">
-      <div dangerouslySetInnerHTML={{ __html: renderWithTwemoji(processedContent) }} />
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Custom link rendering with proper types
+          a: ({ node, href, children, ...props }: MarkdownComponentProps & { href?: string }) => (
+            <a 
+              href={href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-blue-400 hover:underline"
+              {...props}
+            >
+              <TwemojiText>{children}</TwemojiText>
+            </a>
+          ),
+          
+          // Custom paragraph rendering with Twemoji support
+          p: createTwemojiComponent('p'),
+          
+          // Custom code rendering with proper TypeScript types
+          code: ({ node, inline, className, children, ...props }: MarkdownComponentProps & { 
+            inline?: boolean;
+            className?: string;
+          }) => {
+            // For inline code, explicitly return just the code element
+            if (inline === true) {
+              return (
+                <code className="bg-[#2f3136] px-1 py-0.5 rounded text-sm font-mono" {...props}>
+                  {children}
+                </code>
+              );
+            }
+            
+            // For code blocks (not inline), return the pre+code structure
+            return (
+              <pre className="bg-[#2f3136] p-2 rounded my-2 overflow-x-auto">
+                <code className="font-mono text-sm" {...props}>{children}</code>
+              </pre>
+            );
+          },
+          
+          // Custom blockquote rendering
+          blockquote: ({ node, children, ...props }: MarkdownComponentProps) => (
+            <blockquote 
+              className="border-l-4 border-[#4f545c] pl-2 py-0.5 my-1 text-muted-foreground italic"
+              {...props}
+            >
+              <TwemojiText>{children}</TwemojiText>
+            </blockquote>
+          ),
+          
+          // List rendering
+          ul: ({ node, children, ...props }: MarkdownComponentProps) => (
+            <ul className="list-disc pl-6 my-2" {...props}>
+              {children}
+            </ul>
+          ),
+          
+          ol: ({ node, children, ...props }: MarkdownComponentProps) => (
+            <ol className="list-decimal pl-6 my-2" {...props}>
+              {children}
+            </ol>
+          ),
+          
+          // Heading rendering
+          h1: createTwemojiComponent((props) => <h1 className="text-xl font-bold my-2" {...props} />),
+          h2: createTwemojiComponent((props) => <h2 className="text-lg font-bold my-2" {...props} />),
+          h3: createTwemojiComponent((props) => <h3 className="text-md font-bold my-2" {...props} />),
+          h4: createTwemojiComponent((props) => <h4 className="text-base font-bold my-1" {...props} />),
+          h5: createTwemojiComponent((props) => <h5 className="text-base font-bold my-1" {...props} />),
+          h6: createTwemojiComponent((props) => <h6 className="text-base font-bold my-1" {...props} />),
+          
+          // Formatting elements
+          strong: createTwemojiComponent('strong'),
+          em: createTwemojiComponent('em'),
+          del: createTwemojiComponent('del'),
+        }}
+      >
+        {contentWithLinks}
+      </ReactMarkdown>
     </div>
   );
 });
 
 // Add display name for debugging
 MessageContent.displayName = 'MessageContent';
-
-// Export as named export to avoid "multiple default exports" error
-export { MessageContent };
 
 // Types to match those in ChatBox
 interface Message {
@@ -263,3 +340,5 @@ function MessageGroup({
 
 // Export with memo for additional optimization
 export default memo(MessageGroup);
+// Export MessageContent for use elsewhere
+export { MessageContent };
