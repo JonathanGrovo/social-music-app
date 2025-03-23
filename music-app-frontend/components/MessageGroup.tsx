@@ -6,6 +6,7 @@ import twemoji from 'twemoji';
 import { TWEMOJI_BASE_URL } from '../utils/emojiConstants';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import React from 'react';
 
 // Define a common interface for markdown component props to avoid repetition
 interface MarkdownComponentProps {
@@ -144,92 +145,119 @@ const MessageContent = memo(({ content }: MessageContentProps) => {
     }
   }
   
-  // For regular messages, convert URLs to markdown links if they're not already
-  const contentWithLinks = autoLinkUrls(contentWithEmojis);
+  // For regular messages, prepare the content for rendering
+  let processedContent = contentWithEmojis;
   
-  // Then use ReactMarkdown for rendering
+  // 1. Replace multiple spaces with non-breaking spaces (keep first space as-is)
+  processedContent = processedContent.replace(/ {2,}/g, match => 
+    ' ' + '\u00A0'.repeat(match.length - 1)
+  );
+  
+  // 2. Convert URLs to markdown links if they're not already
+  processedContent = autoLinkUrls(processedContent);
+  
+  // 3. Properly handle line breaks for rendering
+  // Split content by newlines first to process each line separately
+  const lines = processedContent.split('\n');
+  
+  // Use ReactMarkdown for rendering with proper whitespace preservation
   return (
     <div className="markdown-content">
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Custom link rendering with proper types
-          a: ({ node, href, children, ...props }: MarkdownComponentProps & { href?: string }) => (
-            <a 
-              href={href} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-blue-400 hover:underline"
-              {...props}
+      {lines.map((line, index) => (
+        <React.Fragment key={index}>
+          {index > 0 && <br className="line-break" />}
+          {line.trim() ? (
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // Custom link rendering with proper types
+                a: ({ node, href, children, ...props }: MarkdownComponentProps & { href?: string }) => (
+                  <a 
+                    href={href} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-blue-400 hover:underline"
+                    {...props}
+                  >
+                    <TwemojiText>{children}</TwemojiText>
+                  </a>
+                ),
+                
+                // Custom paragraph rendering with Twemoji support
+                // For lines that were processed by ReactMarkdown, we need to avoid wrapping in <p> tags
+                p: ({ children, ...props }: MarkdownComponentProps) => (
+                  <span className="markdown-line" {...props}>
+                    <TwemojiText>{children}</TwemojiText>
+                  </span>
+                ),
+                
+                // Custom code rendering with proper TypeScript types
+                code: ({ node, inline, className, children, ...props }: MarkdownComponentProps & { 
+                  inline?: boolean;
+                  className?: string;
+                }) => {
+                  // For inline code, explicitly return just the code element
+                  if (inline === true) {
+                    return (
+                      <code className="bg-[#2f3136] px-1 py-0.5 rounded text-sm font-mono" {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                  
+                  // For code blocks (not inline), return the pre+code structure
+                  return (
+                    <pre className="bg-[#2f3136] p-2 rounded my-2 overflow-x-auto">
+                      <code className="font-mono text-sm" {...props}>{children}</code>
+                    </pre>
+                  );
+                },
+                
+                // Custom blockquote rendering
+                blockquote: ({ node, children, ...props }: MarkdownComponentProps) => (
+                  <blockquote 
+                    className="border-l-4 border-[#4f545c] pl-2 py-0.5 my-1 text-muted-foreground italic"
+                    {...props}
+                  >
+                    <TwemojiText>{children}</TwemojiText>
+                  </blockquote>
+                ),
+                
+                // List rendering
+                ul: ({ node, children, ...props }: MarkdownComponentProps) => (
+                  <ul className="list-disc pl-6 my-2" {...props}>
+                    {children}
+                  </ul>
+                ),
+                
+                ol: ({ node, children, ...props }: MarkdownComponentProps) => (
+                  <ol className="list-decimal pl-6 my-2" {...props}>
+                    {children}
+                  </ol>
+                ),
+                
+                // Heading rendering
+                h1: createTwemojiComponent((props) => <h1 className="text-xl font-bold my-2" {...props} />),
+                h2: createTwemojiComponent((props) => <h2 className="text-lg font-bold my-2" {...props} />),
+                h3: createTwemojiComponent((props) => <h3 className="text-md font-bold my-2" {...props} />),
+                h4: createTwemojiComponent((props) => <h4 className="text-base font-bold my-1" {...props} />),
+                h5: createTwemojiComponent((props) => <h5 className="text-base font-bold my-1" {...props} />),
+                h6: createTwemojiComponent((props) => <h6 className="text-base font-bold my-1" {...props} />),
+                
+                // Formatting elements
+                strong: createTwemojiComponent('strong'),
+                em: createTwemojiComponent('em'),
+                del: createTwemojiComponent('del'),
+              }}
             >
-              <TwemojiText>{children}</TwemojiText>
-            </a>
-          ),
-          
-          // Custom paragraph rendering with Twemoji support
-          p: createTwemojiComponent('p'),
-          
-          // Custom code rendering with proper TypeScript types
-          code: ({ node, inline, className, children, ...props }: MarkdownComponentProps & { 
-            inline?: boolean;
-            className?: string;
-          }) => {
-            // For inline code, explicitly return just the code element
-            if (inline === true) {
-              return (
-                <code className="bg-[#2f3136] px-1 py-0.5 rounded text-sm font-mono" {...props}>
-                  {children}
-                </code>
-              );
-            }
-            
-            // For code blocks (not inline), return the pre+code structure
-            return (
-              <pre className="bg-[#2f3136] p-2 rounded my-2 overflow-x-auto">
-                <code className="font-mono text-sm" {...props}>{children}</code>
-              </pre>
-            );
-          },
-          
-          // Custom blockquote rendering
-          blockquote: ({ node, children, ...props }: MarkdownComponentProps) => (
-            <blockquote 
-              className="border-l-4 border-[#4f545c] pl-2 py-0.5 my-1 text-muted-foreground italic"
-              {...props}
-            >
-              <TwemojiText>{children}</TwemojiText>
-            </blockquote>
-          ),
-          
-          // List rendering
-          ul: ({ node, children, ...props }: MarkdownComponentProps) => (
-            <ul className="list-disc pl-6 my-2" {...props}>
-              {children}
-            </ul>
-          ),
-          
-          ol: ({ node, children, ...props }: MarkdownComponentProps) => (
-            <ol className="list-decimal pl-6 my-2" {...props}>
-              {children}
-            </ol>
-          ),
-          
-          // Heading rendering
-          h1: createTwemojiComponent((props) => <h1 className="text-xl font-bold my-2" {...props} />),
-          h2: createTwemojiComponent((props) => <h2 className="text-lg font-bold my-2" {...props} />),
-          h3: createTwemojiComponent((props) => <h3 className="text-md font-bold my-2" {...props} />),
-          h4: createTwemojiComponent((props) => <h4 className="text-base font-bold my-1" {...props} />),
-          h5: createTwemojiComponent((props) => <h5 className="text-base font-bold my-1" {...props} />),
-          h6: createTwemojiComponent((props) => <h6 className="text-base font-bold my-1" {...props} />),
-          
-          // Formatting elements
-          strong: createTwemojiComponent('strong'),
-          em: createTwemojiComponent('em'),
-          del: createTwemojiComponent('del'),
-        }}
-      >
-        {contentWithLinks}
-      </ReactMarkdown>
+              {line}
+            </ReactMarkdown>
+          ) : (
+            // Empty line - just render an empty span to maintain height
+            <span className="empty-line">&nbsp;</span>
+          )}
+        </React.Fragment>
+      ))}
     </div>
   );
 });

@@ -397,3 +397,55 @@ img.emoji:not([src]) {
   z-index: 2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
+
+/* Add these CSS rules to app/globals.css */
+
+/* Ensure whitespace and line breaks are preserved in markdown content */
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+
+/* Ensure whitespace and line breaks are preserved */
+.markdown-content {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+/* Style for line breaks */
+.markdown-content .line-break {
+  display: block;
+  margin: 0.6em 0;
+  line-height: 1;
+}
+
+/* For consecutive line breaks (empty lines) */
+.markdown-content .empty-line {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}
+
+/* Style for inline markdown spans */
+.markdown-content .markdown-line {
+  display: inline;
+}
+
+/* Ensure proper spacing */
+.markdown-content > *:not(:last-child) {
+  margin-bottom: 0.25em;
+}
+
+/* Emoji sizing for emoji-only messages - keep these styles */
+.large-emoji img.emoji {
+  height: 3rem !important;
+  width: 3rem !important;
+  margin: 0.2rem !important;
+}
+
+.medium-emoji img.emoji {
+  height: 2rem !important;
+  width: 2rem !important;
+  margin: 0.1rem !important;
+}
