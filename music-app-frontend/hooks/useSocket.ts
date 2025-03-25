@@ -5,6 +5,9 @@ import { EventType, RoomState, ChatMessage, UserInfo, QueueItem } from '../types
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
+// Map for tracking message requests
+const pendingMessageRequests = new Map();
+
 // Helper function to log debug info
 function log(message: string, data?: any) {
   console.log(`[Socket] ${message}`, data || '');
@@ -33,7 +36,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     queue: [],
     chatHistory: [],
     users: [],
-    roomName: ''
+    roomName: '',
+    hasMoreMessages: false
   });
   
   // Use refs to keep track of current values in callbacks
@@ -252,7 +256,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         currentTrack: data.payload.currentTrack,
         queue: data.payload.queue || [],
         users: normalizedUserList,
-        roomName: data.payload.roomName || ''
+        roomName: data.payload.roomName || '',
+        hasMoreMessages: !!data.payload.hasMoreMessages
       }));
     });
 
@@ -471,6 +476,25 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         });
       }
     });
+
+    // Add to the setupSocketHandlers function, in the same area where other socket events are handled
+    socketIo.on('LOAD_MORE_MESSAGES_RESPONSE', (data: any) => {
+      log(`Received older messages: ${data.payload.messages?.length || 0} messages for page ${data.payload.page}`);
+      
+      // Resolve the promise with the messages
+      if (data.payload.requestId && pendingMessageRequests.has(data.payload.requestId)) {
+        const resolver = pendingMessageRequests.get(data.payload.requestId);
+        if (resolver) {
+          // Important: call the resolver with the messages array
+          resolver(data.payload.messages || []);
+          pendingMessageRequests.delete(data.payload.requestId);
+        } else {
+          log('Resolver function not found for request ID:', data.payload.requestId);
+        }
+      } else {
+        log('Request ID not found in pending requests:', data.payload.requestId);
+      }
+    });
     
     return socketIo;
   }, [sendJoinRoom, updateRoomState]);
@@ -589,6 +613,44 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log('Cannot send chat message: not connected');
     }
   }, []);
+
+  // Helper for loading additional chat messages
+  const loadMoreMessages = useCallback((page: number): Promise<ChatMessage[]> => {
+    return new Promise((resolve) => {
+      if (socketRef.current && socketRef.current.connected) {
+        const requestId = `msg_req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        
+        // Store the resolver function to call when response arrives
+        pendingMessageRequests.set(requestId, resolve);
+        
+        log(`Requesting older messages, page ${page}`);
+        socketRef.current.emit('LOAD_MORE_MESSAGES', {
+          roomId: roomIdRef.current,
+          username: usernameRef.current,
+          clientId: clientIdRef.current,
+          avatarId: avatarIdRef.current,
+          payload: { page, requestId },
+          timestamp: Date.now()
+        });
+      } else {
+        resolve([]); // Resolve with empty array if not connected
+      }
+    });
+  }, []);
+
+  // Helper for loading older chat messages
+  const loadOlderMessages = useCallback(async (page: number) => {
+    const olderMessages = await loadMoreMessages(page);
+    if (olderMessages && olderMessages.length > 0) {
+      // Update the roomState directly here
+      setRoomState(prevState => ({
+        ...prevState,
+        chatHistory: [...olderMessages, ...prevState.chatHistory]
+      }));
+      return olderMessages;
+    }
+    return [];
+  }, [loadMoreMessages]);
 
   // Helper for updating playback state
   const updatePlayback = useCallback((currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud' = 'youtube') => {
@@ -803,8 +865,10 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     updatePlayback,
     updateQueue,
     changeUsername,
-    changeAvatar,  // New function for avatar changes
+    changeAvatar,
     disconnect,
-    reconnect
+    reconnect,
+    loadMoreMessages,
+    loadOlderMessages
   };
 }

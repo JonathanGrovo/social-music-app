@@ -74,7 +74,7 @@ export class SocketManager {
       setTimeout(() => {
         const roomState = this.roomStates.get(roomId);
         if (roomState) {
-          const chatHistory = dbService.getRecentMessages(roomId, 100);
+          const chatHistory = dbService.getMessagesByRoom(roomId);
           if (chatHistory.length > 0) {
             console.log(`Loaded ${chatHistory.length} messages for room ${roomId} from database`);
             roomState.chatHistory = chatHistory;
@@ -321,12 +321,6 @@ export class SocketManager {
         // Add to in-memory chat history
         const roomState = this.getOrCreateRoomState(roomId);
         roomState.chatHistory.push(messageObj);
-        
-        
-        // Limit in-memory chat history to prevent memory issues (last 100 messages)
-        if (roomState.chatHistory.length > 100) {
-          roomState.chatHistory.shift();
-        }
 
         // Save to database
         dbService.saveMessage(roomId, messageObj);
@@ -397,15 +391,19 @@ export class SocketManager {
           };
         }
         
-        // Load chat history from database instead of only relying on memory
-        const chatHistory = dbService.getRecentMessages(roomId, 100);
+        // Load just initial page of chat history (10 messages for testing)
+        const chatHistory = dbService.getRecentMessages(roomId, 10);
+
+        // Get total message count to check if there are more messages
+        const totalMessageCount = dbService.getMessageCount(roomId);
+        const hasMoreMessages = totalMessageCount > chatHistory.length;
         
         // Convert users map to array
         const usersList = Array.from(roomState.users.entries()).map(([clientId, userData]) => 
           this.createUserObject(clientId, userData)
         );
         
-        // Send current state with chat history from database
+        // Send current state with chat history and hasMoreMessages flag
         socket.emit(EventType.SYNC_RESPONSE, {
           roomId,
           username: 'server',
@@ -413,9 +411,35 @@ export class SocketManager {
           payload: {
             currentTrack,
             queue: roomState.queue,
-            chatHistory: chatHistory, // Use database history
+            chatHistory: chatHistory,
+            hasMoreMessages: hasMoreMessages, // Make sure this is included
             users: usersList,
             roomName: roomState.roomName
+          },
+          timestamp: Date.now()
+        });
+      });
+
+      // Add handler for loading more messages
+      socket.on('LOAD_MORE_MESSAGES', (message: any) => {
+        console.log('Received request for more messages:', message);
+        const { roomId, payload } = message;
+        const { page, requestId } = payload;
+        const pageSize = 10; // For testing, use 10 messages per page
+        
+        // Get messages with proper pagination
+        const olderMessages = dbService.getPaginatedMessages(roomId, page, pageSize);
+        console.log(`Found ${olderMessages.length} more messages for page ${page}`);
+        
+        // Send response back to the client
+        socket.emit('LOAD_MORE_MESSAGES_RESPONSE', {
+          roomId,
+          username: 'server',
+          clientId: 'server',
+          payload: {
+            messages: olderMessages,
+            page,
+            requestId // Send back the request ID for tracking
           },
           timestamp: Date.now()
         });

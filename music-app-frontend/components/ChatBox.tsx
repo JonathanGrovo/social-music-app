@@ -1,6 +1,5 @@
 // components/ChatBox.tsx
-import { useEffect, useRef, useCallback, useState } from 'react';
-import { memo } from 'react';
+import { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { ChatMessage } from '../types';
 import MessageInput from './MessageInput';
 import VirtualizedMessageList from './VirtualizedMessageList';
@@ -14,6 +13,8 @@ interface ChatBoxProps {
   roomName?: string;
   roomId: string;
   activeTab?: string; // Optional active tab prop
+  hasMoreMessages?: boolean; // Add this prop
+  loadMoreMessages?: (page: number) => Promise<any[]>; // Add this prop
 }
 
 function ChatBox({ 
@@ -24,10 +25,102 @@ function ChatBox({
   avatarId,
   roomName = "the room",
   roomId,
-  activeTab
+  activeTab,
+  hasMoreMessages = false, // Default to false if not provided
+  loadMoreMessages = async () => [] // Default empty implementation
 }: ChatBoxProps) {
-  // Add a ref to track if a message was just sent by this user
   const userJustSentMessageRef = useRef(false);
+  const [page, setPage] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [localHasMoreMessages, setLocalHasMoreMessages] = useState(hasMoreMessages);
+
+  // Update local state when prop changes
+  useEffect(() => {
+    setLocalHasMoreMessages(hasMoreMessages);
+  }, [hasMoreMessages]);
+
+  // Helper function to create message groups
+  const createMessageGroups = (messagesToGroup: ChatMessage[]) => {
+    if (!messagesToGroup || messagesToGroup.length === 0) {
+      return [];
+    }
+    
+    return messagesToGroup.reduce((groups: any[], msg) => {
+      // Skip invalid message objects
+      if (!msg || !msg.clientId || !msg.timestamp) {
+        console.warn('Skipping invalid message object', msg);
+        return groups;
+      }
+      
+      const isCurrentUser = msg.clientId === clientId;
+      const msgId = `${msg.clientId}-${msg.timestamp}`;
+      
+      // Try to add to the last group if from same author and within time threshold
+      const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+      
+      try {
+        if (
+          lastGroup && 
+          lastGroup.authorClientId === msg.clientId &&
+          msg.timestamp - lastGroup.messages[lastGroup.messages.length - 1].timestamp < MESSAGE_GROUPING_THRESHOLD
+        ) {
+          // Add to existing group
+          lastGroup.messages.push({
+            content: msg.content,
+            timestamp: msg.timestamp,
+            id: msgId
+          });
+        } else {
+          // Create new group
+          groups.push({
+            authorClientId: msg.clientId,
+            authorUsername: msg.username,
+            authorAvatarId: msg.avatarId || 'avatar1',
+            isCurrentUser,
+            timestamp: msg.timestamp,
+            messages: [{
+              content: msg.content,
+              timestamp: msg.timestamp,
+              id: msgId
+            }]
+          });
+        }
+      } catch (error) {
+        console.error('Error processing message for grouping', error, msg);
+      }
+      
+      return groups;
+    }, []);
+  };
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const olderMessages = await loadMoreMessages(page + 1);
+      console.log("Received older messages:", olderMessages);
+      
+      if (olderMessages && olderMessages.length > 0) {
+        // Update state by directly adding to messages prop
+        // This assumes onSendMessage can handle this
+        // Define a new custom prop that lets you update messages
+        
+        // SIMPLIFIED TEST APPROACH:
+        // For testing, let's add a visual indicator that messages were received
+        console.log("Would add these messages to UI:", olderMessages);
+        alert(`Received ${olderMessages.length} older messages!`);
+        
+        setPage(prev => prev + 1);
+      } else {
+        setLocalHasMoreMessages(false);
+      }
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [page, isLoadingMore, loadMoreMessages]);
   
   // Format time only (HH:MM AM/PM)
   const formatTimeOnly = useCallback((timestamp: number): string => {
@@ -133,8 +226,11 @@ function ChatBox({
         messages={groupedMessages}
         formatMessageDate={formatMessageDate}
         formatTimeOnly={formatTimeOnly}
-        onScrollChange={() => {}} // We don't need this for now
-        activeTab={activeTab}    // Make sure to pass this prop
+        onScrollChange={() => {}}
+        activeTab={activeTab}
+        hasMoreMessages={hasMoreMessages}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={handleLoadMore}
       />
       
       {/* Use the optimized input component */}

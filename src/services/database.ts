@@ -214,7 +214,53 @@ saveRoom(roomId: string, roomName: string): void {
       return [];
     }
   }
-  
+
+  /**
+   * Get paginated messages for a room
+   */
+  getPaginatedMessages(roomId: string, page: number = 0, pageSize: number = 10): ChatMessage[] {
+    try {
+      console.log(`Getting page ${page} of messages for room ${roomId}, pageSize=${pageSize}`);
+      const offset = page * pageSize;
+      
+      const stmt = this.db.prepare(`
+        SELECT username, content, timestamp, clientId, avatarId
+        FROM messages
+        WHERE roomId = ?
+        ORDER BY timestamp DESC
+        LIMIT ? OFFSET ?
+      `);
+      
+      const messages = stmt.all(roomId, pageSize, offset) as ChatMessage[];
+      console.log(`Found ${messages.length} messages for page ${page}`);
+      
+      // Messages should be in chronological order (oldest first)
+      return messages.reverse();
+    } catch (error) {
+      console.error(`Error fetching paginated messages for room ${roomId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+ * Get the total count of messages in a room
+ */
+  getMessageCount(roomId: string): number {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT COUNT(*) as count
+        FROM messages
+        WHERE roomId = ?
+      `);
+      
+      const result = stmt.get(roomId) as { count: number };
+      return result.count;
+    } catch (error) {
+      console.error(`Error counting messages for room ${roomId}:`, error);
+      return 0;
+    }
+  }
+
   /**
    * Close the database connection when shutting down
    */

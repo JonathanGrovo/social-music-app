@@ -34,7 +34,8 @@ export interface RoomState {
   };
   queue: QueueItem[];
   chatHistory: ChatMessage[];
-  users: UserInfo[]; // Array of user info objects
+  users: UserInfo[]; 
+  hasMoreMessages?: boolean;
 }
 
 export enum EventType {

@@ -19,6 +19,9 @@ interface VirtualizedMessageListProps {
   formatTimeOnly: (timestamp: number) => string;
   onScrollChange: (isNearBottom: boolean) => void;
   activeTab?: string;
+  hasMoreMessages?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 function VirtualizedMessageList({
@@ -26,7 +29,10 @@ function VirtualizedMessageList({
   formatMessageDate,
   formatTimeOnly,
   onScrollChange,
-  activeTab
+  activeTab,
+  hasMoreMessages = false,
+  isLoadingMore = false,
+  onLoadMore = () => {}
 }: VirtualizedMessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showScrollToBottomButton, setShowScrollToBottomButton] = useState(false);
@@ -179,6 +185,17 @@ function VirtualizedMessageList({
           scrollbarColor: '#4a4d53 transparent'
         }}
       >
+  {/* Load More button - make sure it's at the TOP */}
+  {hasMoreMessages && (
+    <div className="flex justify-center py-2 mb-4">
+      <button
+        onClick={onLoadMore}
+        className="px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-hover"
+      >
+        {isLoadingMore ? 'Loading...' : 'Load More Messages'}
+      </button>
+    </div>
+  )}
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground py-4">
