@@ -13,8 +13,8 @@ interface ChatBoxProps {
   roomName?: string;
   roomId: string;
   activeTab?: string; // Optional active tab prop
-  hasMoreMessages?: boolean; // Add this prop
-  loadMoreMessages?: (page: number) => Promise<any[]>; // Add this prop
+  hasMoreMessages?: boolean;
+  loadMoreMessages?: (page: number) => Promise<any[]>;
 }
 
 function ChatBox({ 
@@ -38,60 +38,6 @@ function ChatBox({
   useEffect(() => {
     setLocalHasMoreMessages(hasMoreMessages);
   }, [hasMoreMessages]);
-
-  // Helper function to create message groups
-  const createMessageGroups = (messagesToGroup: ChatMessage[]) => {
-    if (!messagesToGroup || messagesToGroup.length === 0) {
-      return [];
-    }
-    
-    return messagesToGroup.reduce((groups: any[], msg) => {
-      // Skip invalid message objects
-      if (!msg || !msg.clientId || !msg.timestamp) {
-        console.warn('Skipping invalid message object', msg);
-        return groups;
-      }
-      
-      const isCurrentUser = msg.clientId === clientId;
-      const msgId = `${msg.clientId}-${msg.timestamp}`;
-      
-      // Try to add to the last group if from same author and within time threshold
-      const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
-      
-      try {
-        if (
-          lastGroup && 
-          lastGroup.authorClientId === msg.clientId &&
-          msg.timestamp - lastGroup.messages[lastGroup.messages.length - 1].timestamp < MESSAGE_GROUPING_THRESHOLD
-        ) {
-          // Add to existing group
-          lastGroup.messages.push({
-            content: msg.content,
-            timestamp: msg.timestamp,
-            id: msgId
-          });
-        } else {
-          // Create new group
-          groups.push({
-            authorClientId: msg.clientId,
-            authorUsername: msg.username,
-            authorAvatarId: msg.avatarId || 'avatar1',
-            isCurrentUser,
-            timestamp: msg.timestamp,
-            messages: [{
-              content: msg.content,
-              timestamp: msg.timestamp,
-              id: msgId
-            }]
-          });
-        }
-      } catch (error) {
-        console.error('Error processing message for grouping', error, msg);
-      }
-      
-      return groups;
-    }, []);
-  };
 
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore) return;
@@ -180,7 +126,7 @@ function ChatBox({
       }
       
       const isCurrentUser = msg.clientId === clientId;
-      const msgId = `${msg.clientId}-${msg.timestamp}`;
+      const msgId = `msg-${msg.clientId}-${msg.timestamp}-${Math.random().toString(36).substring(2, 9)}`;
       
       // Try to add to the last group if from same author and within time threshold
       const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;

@@ -247,18 +247,37 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         };
       });
       
-      // Apply all updates directly
-      setRoomState(prevState => ({
-        ...prevState,
-        chatHistory: processedChatHistory && processedChatHistory.length > 0
-          ? processedChatHistory
-          : prevState.chatHistory,
-        currentTrack: data.payload.currentTrack,
-        queue: data.payload.queue || [],
-        users: normalizedUserList,
-        roomName: data.payload.roomName || '',
-        hasMoreMessages: !!data.payload.hasMoreMessages
-      }));
+      // Apply updates to state while preserving pagination
+      setRoomState(prevState => {
+        // CRITICAL CHANGE: Check if this looks like a periodic sync
+        // by seeing if we already have more messages than what the server sent
+        const isPeriodic = (
+          // We have more messages than server is sending
+          prevState.chatHistory.length > processedChatHistory.length &&
+          // Server is sending a small batch (typical for syncs)
+          processedChatHistory.length <= 10
+        );
+        
+        // Only preserve chat history for periodic syncs
+        const updatedChatHistory = isPeriodic 
+          ? prevState.chatHistory  // Keep our existing history
+          : processedChatHistory;  // Use server history for initial loads
+        
+        if (isPeriodic) {
+          log(`Preserved pagination - keeping ${prevState.chatHistory.length} messages instead of ${processedChatHistory.length}`);
+        }
+        
+        return {
+          ...prevState,
+          chatHistory: updatedChatHistory,
+          currentTrack: data.payload.currentTrack,
+          queue: data.payload.queue || [],
+          users: normalizedUserList,
+          roomName: data.payload.roomName || '',
+          // Also preserve hasMoreMessages flag for pagination
+          hasMoreMessages: isPeriodic ? prevState.hasMoreMessages : !!data.payload.hasMoreMessages
+        };
+      });
     });
 
     // Handle chat messages
