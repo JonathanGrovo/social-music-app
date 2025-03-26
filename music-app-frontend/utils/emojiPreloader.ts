@@ -75,7 +75,6 @@ async function preloadEmoji(emoji: string): Promise<void> {
       };
     });
     
-    console.log(`Preloaded emoji: ${emoji}`);
   } catch (error) {
     console.warn(`Error preloading emoji ${emoji}:`, error);
   } finally {
@@ -87,7 +86,6 @@ async function preloadEmoji(emoji: string): Promise<void> {
  * Preload top emojis immediately
  */
 function preloadTopEmojis(): void {
-  console.log('Starting top emoji preloading...');
   
   // Load top emojis with minimal delay
   TOP_EMOJIS.forEach((emoji, index) => {
@@ -109,13 +107,10 @@ function preloadTopEmojis(): void {
 /**
  * Preload emoji categories in the background
  */
-function preloadEmojiCategories(): void {
-  console.log('Starting background category emoji preloading...');
-  
+function preloadEmojiCategories(): void {  
   // Load categories with sufficient delays to not impact performance
   Object.entries(EMOJI_CATEGORIES).forEach(([category, emojis], categoryIndex) => {
     setTimeout(() => {
-      console.log(`Loading ${category} emoji category...`);
       emojis.forEach((emoji, emojiIndex) => {
         setTimeout(() => {
           // Skip if already loaded from top or secondary emojis
