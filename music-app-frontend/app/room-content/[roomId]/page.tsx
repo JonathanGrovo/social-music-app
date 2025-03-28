@@ -118,11 +118,10 @@ export default function RoomContentPage() {
     socket,
     connected,
     roomState = {
+      roomName: '',
       queue: [],
       chatHistory: [],
       users: [],
-      roomName: '',
-      hasMoreMessages: false
     },
     sendChatMessage,
     updatePlayback,
@@ -131,8 +130,6 @@ export default function RoomContentPage() {
     changeAvatar,
     disconnect,
     reconnect,
-    loadMoreMessages,
-    loadOlderMessages
   } = useSocket(roomId, username, clientId, avatarId);
 
   // Update room name from socket roomState if available
@@ -388,7 +385,7 @@ export default function RoomContentPage() {
 <div className="flex-1 flex flex-col h-full overflow-hidden">
   <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col h-full`}>
     <ChatBox
-      messages={roomState.chatHistory}
+      messages={roomState.chatHistory || []}
       onSendMessage={sendChatMessage}
       username={username}
       clientId={clientId}
@@ -396,8 +393,6 @@ export default function RoomContentPage() {
       roomName={roomName || 'the room'}
       roomId={roomId}
       activeTab={activeTab}
-      hasMoreMessages={roomState.hasMoreMessages} 
-      loadMoreMessages={loadOlderMessages}
     />
   </div>
   

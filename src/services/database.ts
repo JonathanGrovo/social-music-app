@@ -261,6 +261,28 @@ saveRoom(roomId: string, roomName: string): void {
     }
   }
 
+  // Add this method to DatabaseService class
+  getMessagesBeforeTimestamp(roomId: string, timestamp: number, limit: number = 10): ChatMessage[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT username, content, timestamp, clientId, avatarId
+        FROM messages
+        WHERE roomId = ? AND timestamp < ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `);
+      
+      // Get messages older than the given timestamp
+      const messages = stmt.all(roomId, timestamp, limit) as ChatMessage[];
+      
+      // Messages should be in chronological order (oldest first)
+      return messages.reverse();
+    } catch (error) {
+      console.error(`Error fetching messages before timestamp ${timestamp} for room ${roomId}:`, error);
+      return [];
+    }
+  }
+
   /**
    * Close the database connection when shutting down
    */

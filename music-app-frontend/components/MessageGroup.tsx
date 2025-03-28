@@ -296,7 +296,7 @@ function MessageGroup({
 }: MessageGroupProps) {
   
   return (
-    <div className="flex flex-col space-y-0.5">
+    <div className="flex flex-col space-y-0">
       {/* First message with author info */}
       <div className="flex items-start relative group">
         {/* Avatar */}

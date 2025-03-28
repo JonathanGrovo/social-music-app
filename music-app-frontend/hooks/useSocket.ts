@@ -37,7 +37,6 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     chatHistory: [],
     users: [],
     roomName: '',
-    hasMoreMessages: true, // Default to true initially to encourage checking
   });
   
   // Use refs to keep track of current values in callbacks
@@ -232,7 +231,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       const userList = data.payload.users || [];
       const normalizedUserList = userList.map(normalizeUserObject).filter(Boolean) as UserInfo[];
       
-      // Process chat history - accept it directly from the server
+      // Process chat history - get ALL messages from the server
       const processedChatHistory = (data.payload.chatHistory || []).map((msg: any) => {
         // Find the current username for this clientId from the normalized user list
         const userInfo = normalizedUserList.find((user) => user.clientId === msg.clientId);
@@ -247,45 +246,18 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         };
       });
       
-      // Apply updates to state while preserving pagination
-      setRoomState(prevState => {
-        // CRITICAL CHANGE: Check if this looks like a periodic sync
-        // by seeing if we already have more messages than what the server sent
-        const isPeriodic = (
-          // We have more messages than server is sending
-          prevState.chatHistory.length > processedChatHistory.length &&
-          // Server is sending a small batch (typical for syncs)
-          processedChatHistory.length <= 10
-        );
-        
-        // Only preserve chat history for periodic syncs
-        const updatedChatHistory = isPeriodic 
-          ? prevState.chatHistory  // Keep our existing history
-          : processedChatHistory;  // Use server history for initial loads
-        
-        if (isPeriodic) {
-          log(`Preserved pagination - keeping ${prevState.chatHistory.length} messages instead of ${processedChatHistory.length}`);
-        }
-        
-        // IMPORTANT: Always check if hasMoreMessages is explicitly defined in payload
-        // If not defined, default to true when we have messages (safer approach)
-        const hasMore = data.payload.hasMoreMessages !== undefined 
-          ? !!data.payload.hasMoreMessages 
-          : processedChatHistory.length > 0;
-        
-        log(`Setting hasMoreMessages to ${hasMore}`);
-        
-        return {
-          ...prevState,
-          chatHistory: updatedChatHistory,
-          currentTrack: data.payload.currentTrack,
-          queue: data.payload.queue || [],
-          users: normalizedUserList,
-          roomName: data.payload.roomName || '',
-          // Ensure hasMoreMessages is always set
-          hasMoreMessages: isPeriodic ? prevState.hasMoreMessages : hasMore
-        };
-      });
+      // Always use the server's chat history, sorted by timestamp
+      const sortedChatHistory = [...processedChatHistory].sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Update the state with the complete history (without pagination-related properties)
+      setRoomState(prevState => ({
+        ...prevState,
+        chatHistory: sortedChatHistory,
+        currentTrack: data.payload.currentTrack,
+        queue: data.payload.queue || [],
+        users: normalizedUserList,
+        roomName: data.payload.roomName || ''
+      }));
     });
 
     // Handle chat messages
@@ -503,25 +475,6 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         });
       }
     });
-
-    // Add to the setupSocketHandlers function, in the same area where other socket events are handled
-    socketIo.on('LOAD_MORE_MESSAGES_RESPONSE', (data: any) => {
-      log(`Received older messages: ${data.payload.messages?.length || 0} messages for page ${data.payload.page}`);
-      
-      // Resolve the promise with the messages
-      if (data.payload.requestId && pendingMessageRequests.has(data.payload.requestId)) {
-        const resolver = pendingMessageRequests.get(data.payload.requestId);
-        if (resolver) {
-          // Important: call the resolver with the messages array
-          resolver(data.payload.messages || []);
-          pendingMessageRequests.delete(data.payload.requestId);
-        } else {
-          log('Resolver function not found for request ID:', data.payload.requestId);
-        }
-      } else {
-        log('Request ID not found in pending requests:', data.payload.requestId);
-      }
-    });
     
     return socketIo;
   }, [sendJoinRoom, updateRoomState]);
@@ -640,80 +593,6 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       log('Cannot send chat message: not connected');
     }
   }, []);
-
-  // Helper for loading additional chat messages
-  const loadMoreMessages = useCallback((page: number): Promise<ChatMessage[]> => {
-    return new Promise((resolve) => {
-      if (socketRef.current && socketRef.current.connected) {
-        const requestId = `msg_req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        
-        // Store the resolver function to call when response arrives
-        pendingMessageRequests.set(requestId, resolve);
-        
-        log(`Requesting older messages, page ${page}`);
-        socketRef.current.emit('LOAD_MORE_MESSAGES', {
-          roomId: roomIdRef.current,
-          username: usernameRef.current,
-          clientId: clientIdRef.current,
-          avatarId: avatarIdRef.current,
-          payload: { page, requestId },
-          timestamp: Date.now()
-        });
-      } else {
-        resolve([]); // Resolve with empty array if not connected
-      }
-    });
-  }, []);
-
-  // Helper for loading older chat messages
-  const loadOlderMessages = useCallback(async (page: number): Promise<ChatMessage[]> => {
-    console.log(`Loading older messages for page ${page}`);
-    try {
-      setRoomState(prevState => ({
-        ...prevState,
-        isLoadingOlderMessages: true
-      }));
-      
-      const olderMessages = await loadMoreMessages(page);
-      
-      if (olderMessages && olderMessages.length > 0) {
-        console.log(`Received ${olderMessages.length} older messages`);
-        
-        // Update the roomState directly here
-        setRoomState(prevState => {
-          // Create a new array with the older messages first, then the current messages
-          const updatedChatHistory = [...olderMessages, ...prevState.chatHistory];
-          
-          return {
-            ...prevState,
-            chatHistory: updatedChatHistory,
-            isLoadingOlderMessages: false,
-            hasMoreMessages: olderMessages.length >= 10 // If we got less than requested, probably no more
-          };
-        });
-        
-        return olderMessages;
-      } else {
-        // No more messages available
-        setRoomState(prevState => ({
-          ...prevState,
-          hasMoreMessages: false,
-          isLoadingOlderMessages: false
-        }));
-        
-        return [];
-      }
-    } catch (error) {
-      console.error('Error loading older messages:', error);
-      
-      setRoomState(prevState => ({
-        ...prevState,
-        isLoadingOlderMessages: false
-      }));
-      
-      return [];
-    }
-  }, [loadMoreMessages]);
 
   // Helper for updating playback state
   const updatePlayback = useCallback((currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud' = 'youtube') => {
@@ -931,7 +810,5 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     changeAvatar,
     disconnect,
     reconnect,
-    loadMoreMessages,
-    loadOlderMessages
   };
 }

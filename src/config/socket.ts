@@ -390,20 +390,15 @@ export class SocketManager {
             startTime: currentTrack.startTime + elapsed
           };
         }
-        
-        // Load just initial page of chat history (10 messages for testing)
-        const chatHistory = dbService.getRecentMessages(roomId, 10);
 
-        // Get total message count to check if there are more messages
-        const totalMessageCount = dbService.getMessageCount(roomId);
-        const hasMoreMessages = totalMessageCount > chatHistory.length;
+        const chatHistory = dbService.getMessagesByRoom(roomId);
         
         // Convert users map to array
         const usersList = Array.from(roomState.users.entries()).map(([clientId, userData]) => 
           this.createUserObject(clientId, userData)
         );
         
-        // Send current state with chat history and hasMoreMessages flag
+        // Send current state with COMPLETE chat history, no hasMoreMessages flag
         socket.emit(EventType.SYNC_RESPONSE, {
           roomId,
           username: 'server',
@@ -412,34 +407,9 @@ export class SocketManager {
             currentTrack,
             queue: roomState.queue,
             chatHistory: chatHistory,
-            hasMoreMessages: hasMoreMessages, // Make sure this is included
+            // Remove hasMoreMessages flag
             users: usersList,
             roomName: roomState.roomName
-          },
-          timestamp: Date.now()
-        });
-      });
-
-      // Add handler for loading more messages
-      socket.on('LOAD_MORE_MESSAGES', (message: any) => {
-        console.log('Received request for more messages:', message);
-        const { roomId, payload } = message;
-        const { page, requestId } = payload;
-        const pageSize = 10; // For testing, use 10 messages per page
-        
-        // Get messages with proper pagination
-        const olderMessages = dbService.getPaginatedMessages(roomId, page, pageSize);
-        console.log(`Found ${olderMessages.length} more messages for page ${page}`);
-        
-        // Send response back to the client
-        socket.emit('LOAD_MORE_MESSAGES_RESPONSE', {
-          roomId,
-          username: 'server',
-          clientId: 'server',
-          payload: {
-            messages: olderMessages,
-            page,
-            requestId // Send back the request ID for tracking
           },
           timestamp: Date.now()
         });

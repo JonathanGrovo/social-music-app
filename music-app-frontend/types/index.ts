@@ -4,8 +4,8 @@ export interface ChatMessage {
   username: string;
   content: string;
   timestamp: number;
-  clientId: string;    // Still needed for identification
-  avatarId?: string;   // Optional avatar for the message
+  clientId: string;
+  avatarId?: string;
 }
 
 export interface QueueItem {
@@ -17,10 +17,10 @@ export interface QueueItem {
 }
 
 export interface UserInfo {
-  username: string;    // The display name
-  clientId: string;    // Unique identifier for the user's connection
-  avatarId: string;    // Avatar identifier
-  isRoomOwner?: boolean; // Whether this user owns the room
+  username: string;
+  clientId: string;
+  avatarId: string;
+  isRoomOwner?: boolean;
 }
 
 export interface RoomState {
@@ -35,7 +35,6 @@ export interface RoomState {
   queue: QueueItem[];
   chatHistory: ChatMessage[];
   users: UserInfo[]; 
-  hasMoreMessages?: boolean;
 }
 
 export enum EventType {
