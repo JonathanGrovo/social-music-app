@@ -105,6 +105,34 @@ const createTwemojiComponent = (Component: React.ElementType) => {
   );
 };
 
+// Comparison function for memoization
+const arePropsEqual = (prevProps: MessageGroupProps, nextProps: MessageGroupProps) => {
+  // Check if message count is the same
+  if (prevProps.messages.length !== nextProps.messages.length) {
+    return false;
+  }
+  
+  // Check if the timestamp is the same
+  if (prevProps.timestamp !== nextProps.timestamp) {
+    return false;
+  }
+  
+  // Check if author info changed
+  if (
+    prevProps.authorClientId !== nextProps.authorClientId ||
+    prevProps.authorUsername !== nextProps.authorUsername ||
+    prevProps.authorAvatarId !== nextProps.authorAvatarId
+  ) {
+    return false;
+  }
+  
+  // For deeper comparison, you could check if any message content changed
+  // But this might be overkill for most cases
+  
+  // If we got here, the components are effectively the same
+  return true;
+};
+
 interface MessageContentProps {
   content: string;
 }
@@ -367,6 +395,6 @@ function MessageGroup({
 }
 
 // Export with memo for additional optimization
-export default memo(MessageGroup);
+export default memo(MessageGroup, arePropsEqual);
 // Export MessageContent for use elsewhere
 export { MessageContent };

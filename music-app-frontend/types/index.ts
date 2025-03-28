@@ -48,3 +48,20 @@ export enum EventType {
   USERNAME_CHANGE = 'USERNAME_CHANGE',
   AVATAR_CHANGE = 'AVATAR_CHANGE'  // New event type for avatar changes
 }
+
+// For individual message in a group
+export interface GroupedMessage {
+  content: string;
+  timestamp: number;
+  id: string;
+}
+
+// For message groups
+export interface MessageGroupData {
+  authorClientId: string;
+  authorUsername: string;
+  authorAvatarId: string;
+  isCurrentUser: boolean;
+  timestamp: number;
+  messages: GroupedMessage[];
+}
