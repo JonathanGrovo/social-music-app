@@ -16,8 +16,6 @@ interface ChatBoxProps {
   activeTab?: string;
 }
 
-// 
-
 // Message grouping threshold (5 minutes)
 const MESSAGE_GROUPING_THRESHOLD = 5 * 60 * 1000;
 

@@ -12,7 +12,9 @@ function promptUser() {
   console.log('------------------');
   console.log('1. Count messages in a room');
   console.log('2. Backup database');
-  console.log('3. Exit');
+  console.log('3. Delete a specific room');
+  console.log('4. Delete ALL rooms');
+  console.log('5. Exit');
   
   rl.question('Select an option: ', (answer) => {
     switch (answer) {
@@ -23,6 +25,12 @@ function promptUser() {
         backupDatabase();
         break;
       case '3':
+        deleteRoom();
+        break;
+      case '4':
+        deleteAllRooms();
+        break;
+      case '5':
         console.log('Exiting...');
         dbService.close();
         rl.close();
@@ -59,6 +67,40 @@ function backupDatabase() {
   // Implement backup logic here, e.g., using fs to copy the database file
   console.log('Backup complete!');
   promptUser();
+}
+
+function deleteRoom() {
+  rl.question('Enter room ID to delete: ', (roomId) => {
+    try {
+      const deleted = dbService.deleteRoom(roomId);
+      if (deleted) {
+        console.log(`Room ${roomId} successfully deleted from database`);
+      } else {
+        console.log(`Room ${roomId} not found in database`);
+      }
+    } catch (err) {
+      console.error('Error deleting room:', err);
+    }
+    
+    promptUser();
+  });
+}
+
+function deleteAllRooms() {
+  rl.question('Are you sure you want to delete ALL rooms? (yes/no): ', (answer) => {
+    if (answer.toLowerCase() === 'yes') {
+      try {
+        const count = dbService.deleteAllRooms();
+        console.log(`Successfully deleted ${count} rooms from database`);
+      } catch (err) {
+        console.error('Error deleting all rooms:', err);
+      }
+    } else {
+      console.log('Operation cancelled');
+    }
+    
+    promptUser();
+  });
 }
 
 // Start the tool

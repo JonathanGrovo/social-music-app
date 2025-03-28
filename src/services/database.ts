@@ -284,6 +284,64 @@ saveRoom(roomId: string, roomName: string): void {
   }
 
   /**
+ * Delete a specific room and its messages
+ */
+  deleteRoom(roomId: string): boolean {
+    try {
+      // Begin a transaction
+      const transaction = this.db.transaction(() => {
+        // Delete messages for this room
+        const deleteMessages = this.db.prepare(`
+          DELETE FROM messages WHERE roomId = ?
+        `);
+        deleteMessages.run(roomId);
+        
+        // Delete the room
+        const deleteRoom = this.db.prepare(`
+          DELETE FROM rooms WHERE id = ?
+        `);
+        const result = deleteRoom.run(roomId);
+        
+        return result.changes > 0;
+      });
+      
+      return transaction();
+    } catch (error) {
+      console.error(`Error deleting room ${roomId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete all rooms and messages
+   */
+  deleteAllRooms(): number {
+    try {
+      // Begin a transaction
+      const transaction = this.db.transaction(() => {
+        // Delete all messages
+        const deleteMessages = this.db.prepare(`
+          DELETE FROM messages
+        `);
+        deleteMessages.run();
+        
+        // Delete all rooms
+        const deleteRooms = this.db.prepare(`
+          DELETE FROM rooms
+        `);
+        const result = deleteRooms.run();
+        
+        return result.changes;
+      });
+      
+      return transaction();
+    } catch (error) {
+      console.error('Error deleting all rooms:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Close the database connection when shutting down
    */
   close(): void {
