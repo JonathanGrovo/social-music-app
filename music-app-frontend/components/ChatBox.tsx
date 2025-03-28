@@ -14,7 +14,7 @@ interface ChatBoxProps {
   roomId: string;
   activeTab?: string; // Optional active tab prop
   hasMoreMessages?: boolean;
-  loadMoreMessages?: (page: number) => Promise<any[]>;
+  loadMoreMessages?: (page: number) => Promise<ChatMessage[]>;
 }
 
 function ChatBox({ 
@@ -33,11 +33,25 @@ function ChatBox({
   const [page, setPage] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [localHasMoreMessages, setLocalHasMoreMessages] = useState(hasMoreMessages);
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages);
 
-  // Update local state when prop changes
+  // Update local state when props change
   useEffect(() => {
-    setLocalHasMoreMessages(hasMoreMessages);
-  }, [hasMoreMessages]);
+    // If we have fewer than 10 messages and the server says there are no more,
+    // we still want to check again (default to true) since the server might be wrong
+    const shouldCheckForMore = messages.length < 10 ? true : hasMoreMessages;
+    setLocalHasMoreMessages(shouldCheckForMore);
+  }, [hasMoreMessages, messages.length]);
+
+  // Update local messages when props change
+  useEffect(() => {
+    setLocalMessages(messages);
+    
+    // If we have no messages but we know the room exists, assume there might be more
+    if (messages.length === 0 && roomId) {
+      setLocalHasMoreMessages(true);
+    }
+  }, [messages, roomId]);
 
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore) return;
@@ -48,15 +62,8 @@ function ChatBox({
       console.log("Received older messages:", olderMessages);
       
       if (olderMessages && olderMessages.length > 0) {
-        // Update state by directly adding to messages prop
-        // This assumes onSendMessage can handle this
-        // Define a new custom prop that lets you update messages
-        
-        // SIMPLIFIED TEST APPROACH:
-        // For testing, let's add a visual indicator that messages were received
-        console.log("Would add these messages to UI:", olderMessages);
-        alert(`Received ${olderMessages.length} older messages!`);
-        
+        // Update local messages
+        setLocalMessages(prevMessages => [...olderMessages, ...prevMessages]);
         setPage(prev => prev + 1);
       } else {
         setLocalHasMoreMessages(false);
@@ -114,11 +121,11 @@ function ChatBox({
 
   // Calculate message groups
   const groupedMessages = (() => {
-    if (!messages || messages.length === 0) {
+    if (!localMessages || localMessages.length === 0) {
       return [];
     }
     
-    return messages.reduce((groups: any[], msg) => {
+    return localMessages.reduce((groups: any[], msg) => {
       // Skip invalid message objects
       if (!msg || !msg.clientId || !msg.timestamp) {
         console.warn('Skipping invalid message object', msg);
@@ -126,7 +133,9 @@ function ChatBox({
       }
       
       const isCurrentUser = msg.clientId === clientId;
-      const msgId = `msg-${msg.clientId}-${msg.timestamp}-${Math.random().toString(36).substring(2, 9)}`;
+      // Create a truly unique ID for each message by including both timestamp and random component
+      const randomPart = Math.random().toString(36).substring(2, 9);
+      const msgId = `msg-${msg.clientId}-${msg.timestamp}-${randomPart}`;
       
       // Try to add to the last group if from same author and within time threshold
       const lastGroup = groups.length > 0 ? groups[groups.length - 1] : null;
@@ -174,7 +183,7 @@ function ChatBox({
         formatTimeOnly={formatTimeOnly}
         onScrollChange={() => {}}
         activeTab={activeTab}
-        hasMoreMessages={hasMoreMessages}
+        hasMoreMessages={localHasMoreMessages}
         isLoadingMore={isLoadingMore}
         onLoadMore={handleLoadMore}
       />

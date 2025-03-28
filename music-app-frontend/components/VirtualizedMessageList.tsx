@@ -174,6 +174,14 @@ function VirtualizedMessageList({
     setShowScrollToBottomButton(false);
   };
 
+  // Function to handle the load more button click
+  const handleLoadMore = () => {
+    debug('Load more button clicked');
+    if (!isLoadingMore && hasMoreMessages && onLoadMore) {
+      onLoadMore();
+    }
+  };
+
   return (
     <>
       <div 
@@ -185,17 +193,30 @@ function VirtualizedMessageList({
           scrollbarColor: '#4a4d53 transparent'
         }}
       >
-  {/* Load More button - make sure it's at the TOP */}
-  {hasMoreMessages && (
-    <div className="flex justify-center py-2 mb-4">
-      <button
-        onClick={onLoadMore}
-        className="px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-hover"
-      >
-        {isLoadingMore ? 'Loading...' : 'Load More Messages'}
-      </button>
-    </div>
-  )}
+        {/* Load More button - make sure it's at the TOP */}
+        {hasMoreMessages && (
+          <div className="flex justify-center py-2 mb-4">
+            <button
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className={`px-3 py-1 rounded-md ${
+                isLoadingMore 
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+                  : 'bg-primary text-white hover:bg-primary-hover'
+              }`}
+            >
+              {isLoadingMore ? (
+                <div className="flex items-center">
+                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent border-white animate-spin mr-2"></div>
+                  <span>Loading...</span>
+                </div>
+              ) : (
+                'Load More Messages'
+              )}
+            </button>
+          </div>
+        )}
+        
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground py-4">
@@ -203,10 +224,10 @@ function VirtualizedMessageList({
             </div>
           </div>
         ) : (
-          // Render all messages 
-          messages.map((group) => (
+          // Render all messages with unique keys including index to prevent duplicates
+          messages.map((group, index) => (
             <MessageGroup
-              key={`group-${group.authorClientId}-${group.timestamp}`}
+              key={`group-${group.authorClientId}-${group.timestamp}-${index}`}
               authorClientId={group.authorClientId}
               authorUsername={group.authorUsername}
               authorAvatarId={group.authorAvatarId}

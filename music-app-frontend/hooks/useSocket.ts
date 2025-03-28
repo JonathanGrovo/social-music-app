@@ -37,7 +37,7 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     chatHistory: [],
     users: [],
     roomName: '',
-    hasMoreMessages: false
+    hasMoreMessages: true, // Default to true initially to encourage checking
   });
   
   // Use refs to keep track of current values in callbacks
@@ -267,6 +267,14 @@ export function useSocket(roomId: string, username: string, clientId: string, av
           log(`Preserved pagination - keeping ${prevState.chatHistory.length} messages instead of ${processedChatHistory.length}`);
         }
         
+        // IMPORTANT: Always check if hasMoreMessages is explicitly defined in payload
+        // If not defined, default to true when we have messages (safer approach)
+        const hasMore = data.payload.hasMoreMessages !== undefined 
+          ? !!data.payload.hasMoreMessages 
+          : processedChatHistory.length > 0;
+        
+        log(`Setting hasMoreMessages to ${hasMore}`);
+        
         return {
           ...prevState,
           chatHistory: updatedChatHistory,
@@ -274,8 +282,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
           queue: data.payload.queue || [],
           users: normalizedUserList,
           roomName: data.payload.roomName || '',
-          // Also preserve hasMoreMessages flag for pagination
-          hasMoreMessages: isPeriodic ? prevState.hasMoreMessages : !!data.payload.hasMoreMessages
+          // Ensure hasMoreMessages is always set
+          hasMoreMessages: isPeriodic ? prevState.hasMoreMessages : hasMore
         };
       });
     });
@@ -658,17 +666,53 @@ export function useSocket(roomId: string, username: string, clientId: string, av
   }, []);
 
   // Helper for loading older chat messages
-  const loadOlderMessages = useCallback(async (page: number) => {
-    const olderMessages = await loadMoreMessages(page);
-    if (olderMessages && olderMessages.length > 0) {
-      // Update the roomState directly here
+  const loadOlderMessages = useCallback(async (page: number): Promise<ChatMessage[]> => {
+    console.log(`Loading older messages for page ${page}`);
+    try {
       setRoomState(prevState => ({
         ...prevState,
-        chatHistory: [...olderMessages, ...prevState.chatHistory]
+        isLoadingOlderMessages: true
       }));
-      return olderMessages;
+      
+      const olderMessages = await loadMoreMessages(page);
+      
+      if (olderMessages && olderMessages.length > 0) {
+        console.log(`Received ${olderMessages.length} older messages`);
+        
+        // Update the roomState directly here
+        setRoomState(prevState => {
+          // Create a new array with the older messages first, then the current messages
+          const updatedChatHistory = [...olderMessages, ...prevState.chatHistory];
+          
+          return {
+            ...prevState,
+            chatHistory: updatedChatHistory,
+            isLoadingOlderMessages: false,
+            hasMoreMessages: olderMessages.length >= 10 // If we got less than requested, probably no more
+          };
+        });
+        
+        return olderMessages;
+      } else {
+        // No more messages available
+        setRoomState(prevState => ({
+          ...prevState,
+          hasMoreMessages: false,
+          isLoadingOlderMessages: false
+        }));
+        
+        return [];
+      }
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+      
+      setRoomState(prevState => ({
+        ...prevState,
+        isLoadingOlderMessages: false
+      }));
+      
+      return [];
     }
-    return [];
   }, [loadMoreMessages]);
 
   // Helper for updating playback state

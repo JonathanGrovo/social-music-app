@@ -196,7 +196,7 @@ saveRoom(roomId: string, roomName: string): void {
   /**
    * Get limited number of recent messages for a room
    */
-  getRecentMessages(roomId: string, limit: number = 100): ChatMessage[] {
+  getRecentMessages(roomId: string, limit: number = 10): ChatMessage[] {
     try {
       const stmt = this.db.prepare(`
         SELECT username, content, timestamp, clientId, avatarId

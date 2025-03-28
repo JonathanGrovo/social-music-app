@@ -388,16 +388,16 @@ export default function RoomContentPage() {
 <div className="flex-1 flex flex-col h-full overflow-hidden">
   <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col h-full`}>
     <ChatBox
-    messages={roomState.chatHistory}
-    onSendMessage={sendChatMessage}
-    username={username}
-    clientId={clientId}
-    avatarId={avatarId}
-    roomName={roomName || 'the room'}
-    roomId={roomId}
-    activeTab={activeTab}
-    hasMoreMessages={roomState?.hasMoreMessages} // Add optional chaining
-    loadMoreMessages={loadOlderMessages} // Pass the function from useSocket
+      messages={roomState.chatHistory}
+      onSendMessage={sendChatMessage}
+      username={username}
+      clientId={clientId}
+      avatarId={avatarId}
+      roomName={roomName || 'the room'}
+      roomId={roomId}
+      activeTab={activeTab}
+      hasMoreMessages={roomState.hasMoreMessages} 
+      loadMoreMessages={loadOlderMessages}
     />
   </div>
   
