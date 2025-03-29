@@ -340,7 +340,7 @@ export class SocketManager {
       socket.on(EventType.PLAYBACK_UPDATE, (message: any) => {
         console.log(`Playback update for ${message.payload.trackId} at ${message.payload.currentTime}s`);
         
-        const { roomId, payload } = message;
+        const { roomId, payload, clientId } = message;
         
         // Update room state
         const roomState = this.getOrCreateRoomState(roomId);
@@ -354,8 +354,8 @@ export class SocketManager {
           };
         }
         
-        // Broadcast to all users in the room
-        this.io.to(roomId).emit(EventType.PLAYBACK_UPDATE, message);
+        // Broadcast to all users in the room EXCEPT the sender
+        socket.to(roomId).emit(EventType.PLAYBACK_UPDATE, message);
       });
 
       // Handle queue updates
@@ -369,8 +369,8 @@ export class SocketManager {
           roomState.queue = [...payload.queue];
         }
         
-        // Broadcast to all in the room
-        this.io.to(message.roomId).emit(EventType.QUEUE_UPDATE, message);
+        // Broadcast to all in the room except the sender
+        socket.to(roomId).emit(EventType.QUEUE_UPDATE, message);
       });
 
       // Handle sync requests

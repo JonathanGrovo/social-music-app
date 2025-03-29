@@ -649,6 +649,8 @@ export function useSocket(roomId: string, username: string, clientId: string, av
         },
         timestamp: Date.now()
       });
+    } else {
+      log('Cannot update playback: not connected');
     }
   }, []);
 
