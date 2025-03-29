@@ -338,23 +338,23 @@ export class SocketManager {
 
       // Handle playback updates
       socket.on(EventType.PLAYBACK_UPDATE, (message: any) => {
-        console.log('Playback update:', message);
+        console.log(`Playback update for ${message.payload.trackId} at ${message.payload.currentTime}s`);
+        
         const { roomId, payload } = message;
         
         // Update room state
         const roomState = this.getOrCreateRoomState(roomId);
         if (payload.trackId) {
-          // Ensure we're setting startTime correctly
           roomState.currentTrack = {
             id: payload.trackId,
             source: payload.source || 'youtube',
-            startTime: payload.currentTime || 0, // Use the exact time from the client
+            startTime: Number(payload.currentTime) || 0,
             isPlaying: payload.isPlaying,
-            timestamp: Date.now() // Record when this update happened for future sync
+            timestamp: Date.now()
           };
         }
         
-        // Broadcast to all users in the room, including sender for single user case
+        // Broadcast to all users in the room
         this.io.to(roomId).emit(EventType.PLAYBACK_UPDATE, message);
       });
 

@@ -348,12 +348,12 @@ export default function RoomContentPage() {
         
         {/* Player Container - Always visible with responsive behavior */}
         <div className={`video-container ${isCompactMode ? 'player-mode-fixed' : ''} `}>
-          <PlayerControls
-            currentTrack={roomState.currentTrack}
-            queue={roomState.queue}
-            onPlaybackUpdate={updatePlayback}
-            onUpdateQueue={updateQueue}
-          />
+        <PlayerControls
+          currentTrack={roomState.currentTrack}
+          queue={roomState.queue}
+          onPlaybackUpdate={updatePlayback}
+          onUpdateQueue={updateQueue}
+        />
         </div>
       </div>
       

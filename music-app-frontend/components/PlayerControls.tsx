@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactPlayer from 'react-player/youtube';
 import { QueueItem } from '../types';
+import { throttle } from 'lodash';
 
 interface PlayerControlsProps {
   currentTrack?: {
@@ -29,6 +30,15 @@ export default function PlayerControls({
   const [videoTitle, setVideoTitle] = useState<string>('');
   const [volume, setVolume] = useState(0.8);
   const [showVolumeControl, setShowVolumeControl] = useState(false);
+  const lastSentUpdateRef = useRef({
+    trackId: '',
+    time: 0,
+    isPlaying: false,
+    timestamp: 0
+  });
+
+  const lastSyncRequestTime = useRef(0);
+  const isVideoLoadedRef = useRef(false);
 
   // Filter queue to only YouTube videos
   const youtubeQueue = (queue || []).filter(item => item.source === 'youtube');
@@ -44,10 +54,28 @@ export default function PlayerControls({
   // Basic player functionality handlers
   const handlePlay = () => {
     console.log("Play clicked");
+    
+    // Only send update if we've fully loaded the video
+    if (!isVideoLoadedRef.current) {
+      console.log("Ignoring play click - video not yet loaded");
+      return;
+    }
+    
     setLocalIsPlaying(true);
-    if (currentTrack) {
+    
+    if (currentTrack && playerRef.current) {
+      const currentTime = playerRef.current.getCurrentTime() || 0;
+      
+      // Record this update to prevent loop
+      lastSentUpdateRef.current = {
+        trackId: currentTrack.id,
+        time: currentTime,
+        isPlaying: true,
+        timestamp: Date.now()
+      };
+      
       onPlaybackUpdate(
-        playerRef.current?.getCurrentTime() || 0,
+        currentTime,
         true,
         currentTrack.id,
         currentTrack.source
@@ -57,10 +85,28 @@ export default function PlayerControls({
   
   const handlePause = () => {
     console.log("Pause clicked");
+    
+    // Only send update if we've fully loaded the video
+    if (!isVideoLoadedRef.current) {
+      console.log("Ignoring pause click - video not yet loaded");
+      return;
+    }
+    
     setLocalIsPlaying(false);
-    if (currentTrack) {
+    
+    if (currentTrack && playerRef.current) {
+      const currentTime = playerRef.current.getCurrentTime() || 0;
+      
+      // Record this update to prevent loop
+      lastSentUpdateRef.current = {
+        trackId: currentTrack.id,
+        time: currentTime,
+        isPlaying: false,
+        timestamp: Date.now()
+      };
+      
       onPlaybackUpdate(
-        playerRef.current?.getCurrentTime() || 0,
+        currentTime,
         false,
         currentTrack.id,
         currentTrack.source
@@ -70,6 +116,7 @@ export default function PlayerControls({
   
   const handleProgress = (state: { playedSeconds: number }) => {
     if (!isSeeking) {
+      // Just update local state, don't trigger any network events
       setPlaybackPosition(state.playedSeconds);
     }
   };
@@ -84,7 +131,20 @@ export default function PlayerControls({
     console.log("Skip to next clicked");
     if (youtubeQueue.length > 0) {
       const nextTrack = youtubeQueue[0];
+      
+      // First update local track reference
+      isVideoLoadedRef.current = false;
+      
+      // Always start from beginning
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
+      
+      // Record this update to prevent loop
+      lastSentUpdateRef.current = {
+        trackId: nextTrack.id,
+        time: 0,
+        isPlaying: true,
+        timestamp: Date.now()
+      };
       
       // Remove track from queue after a short delay
       setTimeout(() => {
@@ -127,6 +187,13 @@ export default function PlayerControls({
       ? `https://www.youtube.com/watch?v=${currentTrack.id}` 
       : '';
   };
+
+  // Ensures scrubbing through playback doesn't cause too many events sent
+  const throttledUpdatePlayback = useRef(
+    throttle((time, isPlaying, trackId, source) => {
+      onPlaybackUpdate(time, isPlaying, trackId, source);
+    }, 500) // Half second throttle
+  ).current;
   
   // Handle seeking on progress bar
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,21 +204,34 @@ export default function PlayerControls({
   
   const handleSeekMouseUp = () => {
     setIsSeeking(false);
-    if (playerRef.current) {
+    
+    // Only send update if we've fully loaded the video
+    if (!isVideoLoadedRef.current) {
+      console.log("Ignoring seek - video not yet loaded");
+      return;
+    }
+    
+    if (playerRef.current && currentTrack) {
+      // Seek locally
       playerRef.current.seekTo(playbackPosition);
       
-      // Update server with new position
-      if (currentTrack) {
-        onPlaybackUpdate(
-          playbackPosition,
-          localIsPlaying,
-          currentTrack.id,
-          currentTrack.source
-        );
-      }
+      // Record this update to prevent loop
+      lastSentUpdateRef.current = {
+        trackId: currentTrack.id,
+        time: playbackPosition,
+        isPlaying: localIsPlaying,
+        timestamp: Date.now()
+      };
+      
+      // Send update to others
+      onPlaybackUpdate(
+        playbackPosition,
+        localIsPlaying,
+        currentTrack.id,
+        currentTrack.source
+      );
     }
   };
-
   // Volume control handlers
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
@@ -177,6 +257,42 @@ export default function PlayerControls({
       skipToNext(); // Play the first video in the queue
     }
   }, [currentTrack, youtubeQueue.length]);
+
+  useEffect(() => {
+    if (!currentTrack || !playerRef.current) return;
+    
+    console.log(`Track update received - ID: ${currentTrack.id}, Time: ${currentTrack.startTime}s`);
+    
+    // Determine if this update is from our own actions
+    const isSelfUpdate = 
+      lastSentUpdateRef.current.trackId === currentTrack.id && 
+      Math.abs(lastSentUpdateRef.current.time - currentTrack.startTime) < 0.5 &&
+      lastSentUpdateRef.current.isPlaying === currentTrack.isPlaying &&
+      (Date.now() - lastSentUpdateRef.current.timestamp) < 2000;
+    
+    if (isSelfUpdate) {
+      console.log('Ignoring self-update');
+      // Still update play state
+      setLocalIsPlaying(currentTrack.isPlaying);
+      return;
+    }
+    
+    // Wait until player is fully loaded before seeking
+    if (!isVideoLoadedRef.current) {
+      console.log('Video not fully loaded yet, will seek when ready');
+      // Just update the state, the onReady handler will take care of seeking
+      return;
+    }
+    
+    console.log(`Applying external seek to ${currentTrack.startTime}s`);
+    
+    // Apply the seek
+    playerRef.current.seekTo(currentTrack.startTime);
+    setPlaybackPosition(currentTrack.startTime);
+    
+    // Update play state
+    setLocalIsPlaying(currentTrack.isPlaying);
+  }, [currentTrack]);
 
   return (
     <div className="relative bg-card overflow-hidden flex flex-col" 
@@ -225,6 +341,8 @@ export default function PlayerControls({
               }}
               onReady={() => {
                 console.log('Player ready');
+                isVideoLoadedRef.current = true;
+                
                 // Try to get the video title
                 if (playerRef.current && playerRef.current.getInternalPlayer()) {
                   try {
@@ -239,14 +357,53 @@ export default function PlayerControls({
                     console.error('Error getting video title:', e);
                   }
                 }
+                
+                // Add a small delay before seeking to ensure player is fully loaded
+                setTimeout(() => {
+                  if (currentTrack && currentTrack.startTime > 0 && playerRef.current) {
+                    console.log(`Seeking to initial position on ready: ${currentTrack.startTime}s`);
+                    playerRef.current.seekTo(currentTrack.startTime, 'seconds');
+                    
+                    // If video should be playing, force play state
+                    if (currentTrack.isPlaying) {
+                      setLocalIsPlaying(true);
+                    }
+                  }
+                }, 500); // 500ms delay to ensure player is actually ready
               }}
               config={{
                 playerVars: {
                   modestbranding: 1,
                   origin: typeof window !== 'undefined' ? window.location.origin : '',
-                  autoplay: 1
+                  autoplay: 1,
+                  enablejsapi: 1,
+                  showinfo: 0,
+                  rel: 0,
+                  iv_load_policy: 3, // Hide annotations
+                  playsinline: 1, // Play inline on mobile
+                  fs: 0, // Disable fullscreen button
+                  controls: 0, // Disable controls
+                  disablekb: 1, // Disable keyboard controls
+                },
+                embedOptions: {
+                  // These can help with the loading spinner issue
+                  controls: 0,
+                  autoplay: 1,
+                  showinfo: 0,
+                },
+                  // This helps avoid the loading spinner
+                  onUnstarted: () => {
+                    console.log('Player unstarted - handling automatically');
+                    if (playerRef.current && localIsPlaying) {
+                      try {
+                        playerRef.current.getInternalPlayer().playVideo();
+                      } catch (e) {
+                        console.error('Error playing video in onUnstarted handler:', e);
+                      }
+                    }
+                  }
                 }
-              }}
+              }
             />
           </div>
         ) : (

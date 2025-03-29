@@ -50,6 +50,9 @@ export function useSocket(roomId: string, username: string, clientId: string, av
   const isInitializedRef = useRef(false);
   const isUnmountingRef = useRef(false);
 
+  // Ensures proper handling of plackback
+  const lastSentUpdateRef = useRef<{trackId: string, time: number, timestamp: number} | null>(null);
+
   // Update refs when props change
   useEffect(() => {
     if (!hasRequiredValues) return;
@@ -131,27 +134,6 @@ export function useSocket(roomId: string, username: string, clientId: string, av
       return newState;
     });
   }, []);
-
-  // Function to request a full sync from the server
-  const requestFullSync = useCallback(() => {
-    if (socketRef.current && socketRef.current.connected) {
-      log('Requesting full room sync');
-      socketRef.current.emit(EventType.SYNC_REQUEST, {
-        roomId: roomIdRef.current,
-        username: usernameRef.current,
-        clientId: clientIdRef.current,
-        avatarId: avatarIdRef.current,
-        timestamp: Date.now(),
-        payload: {}
-      });
-    }
-  }, []);
-
-  // Set up periodic sync
-  useEffect(() => {
-    const syncInterval = setInterval(requestFullSync, 30000); // Sync every 30 seconds
-    return () => clearInterval(syncInterval);
-  }, [requestFullSync]);
 
   // Function to send join room event
   const sendJoinRoom = useCallback((socket: Socket) => {
@@ -292,19 +274,23 @@ export function useSocket(roomId: string, username: string, clientId: string, av
 
     // Handle playback updates
     socketIo.on(EventType.PLAYBACK_UPDATE, (data) => {
-      log(`Received playback update for track ${data.payload.trackId}`);
+      log(`Received playback update for track ${data.payload.trackId} - Time: ${data.payload.currentTime}s, Playing: ${data.payload.isPlaying}`);
       
-      if (data.payload.trackId) {
-        // Update current track without affecting other state
-        updateRoomState({
-          currentTrack: {
-            id: data.payload.trackId,
-            source: data.payload.source || 'youtube',
-            startTime: data.payload.currentTime || 0,
-            isPlaying: data.payload.isPlaying
-          }
-        });
+      // Skip events from ourselves
+      if (data.clientId === clientIdRef.current) {
+        log('Skipping self-update');
+        return;
       }
+      
+      // Update room state with the external update
+      updateRoomState({
+        currentTrack: {
+          id: data.payload.trackId,
+          source: data.payload.source || 'youtube',
+          startTime: Number(data.payload.currentTime) || 0,
+          isPlaying: data.payload.isPlaying
+        }
+      });
     });
 
     // Handle user join
@@ -546,6 +532,57 @@ export function useSocket(roomId: string, username: string, clientId: string, av
     };
   }, [hasRequiredValues, setupSocketHandlers, sendJoinRoom, roomState.users.length]);
 
+  // Handle incoming playback updates from other users
+  useEffect(() => {
+    if (!socketRef.current) return;
+    
+    const handleExternalPlaybackUpdate = (data: any) => {
+      // Skip if this update is from ourselves
+      if (data.clientId === clientIdRef.current) {
+        return;
+      }
+      
+      log(`Received playback update from another user: ${data.payload.trackId} at ${data.payload.currentTime}s`);
+      
+      // Update the room state with the new playback information
+      setRoomState(prevState => {
+        // If this is for a different track than what we're currently playing,
+        // or if we have no current track, update to the new track
+        if (!prevState.currentTrack || prevState.currentTrack.id !== data.payload.trackId) {
+          return {
+            ...prevState,
+            currentTrack: {
+              id: data.payload.trackId,
+              source: data.payload.source || 'youtube',
+              startTime: data.payload.currentTime || 0,
+              isPlaying: data.payload.isPlaying
+            }
+          };
+        }
+        
+        // Otherwise, just update the current track's properties
+        return {
+          ...prevState,
+          currentTrack: {
+            ...prevState.currentTrack,
+            startTime: data.payload.currentTime || 0,
+            isPlaying: data.payload.isPlaying
+          }
+        };
+      });
+    };
+    
+    // Register the handler
+    socketRef.current.on(EventType.PLAYBACK_UPDATE, handleExternalPlaybackUpdate);
+    
+    // Clean up
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off(EventType.PLAYBACK_UPDATE, handleExternalPlaybackUpdate);
+      }
+    };
+  }, []);
+
   // Manual reconnect helper (exposed to parent component)
   const reconnect = useCallback((newUsername: string, newClientId: string, newAvatarId: string) => {
     log(`Reconnecting with new username: ${newUsername} (client ${newClientId}, avatar ${newAvatarId})`);
@@ -598,15 +635,20 @@ export function useSocket(roomId: string, username: string, clientId: string, av
   const updatePlayback = useCallback((currentTime: number, isPlaying: boolean, trackId: string, source: 'youtube' | 'soundcloud' = 'youtube') => {
     if (socketRef.current && socketRef.current.connected) {
       log(`Sending playback update: ${trackId} (${isPlaying ? 'playing' : 'paused'} at ${currentTime}s)`);
+      
+      // Send the update with the current client ID
       socketRef.current.emit(EventType.PLAYBACK_UPDATE, {
         roomId: roomIdRef.current,
         username: usernameRef.current,
         clientId: clientIdRef.current,
-        payload: { currentTime, isPlaying, trackId, source },
+        payload: { 
+          currentTime, 
+          isPlaying, 
+          trackId, 
+          source 
+        },
         timestamp: Date.now()
       });
-    } else {
-      log('Cannot update playback: not connected');
     }
   }, []);
 
