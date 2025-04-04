@@ -1,4 +1,4 @@
-// Updated PlayerControls.tsx
+// Refined PlayerControls.tsx - preserves YouTube UI elements while handling playback events
 import { useState, useRef, useEffect } from 'react';
 import ReactPlayer from 'react-player/youtube';
 import { QueueItem } from '../types';
@@ -30,114 +30,222 @@ export default function PlayerControls({
   const [videoTitle, setVideoTitle] = useState<string>('');
   const [volume, setVolume] = useState(0.8);
   const [showVolumeControl, setShowVolumeControl] = useState(false);
-  const lastSentUpdateRef = useRef({
-    trackId: '',
+  
+  // Track if video is loaded
+  const isVideoLoadedRef = useRef(false);
+  // Track if we're handling a controlled state change
+  const isControlledChangeRef = useRef(false);
+
+  const ignoreNextPlayerEventRef = useRef(false);
+
+  // Track whether changes are coming from external source
+  const isExternalUpdateRef = useRef(false);
+
+  // Track the last update we sent to prevent duplicates
+  const lastUpdateSentRef = useRef({
+    action: '', // 'play', 'pause', 'seek'
     time: 0,
-    isPlaying: false,
     timestamp: 0
   });
-
-  const lastSyncRequestTime = useRef(0);
-  const isVideoLoadedRef = useRef(false);
-  const isProcessingExternalUpdate = useRef(false);
-  const isHandlingAction = useRef(false);
-
 
   // Filter queue to only YouTube videos
   const youtubeQueue = (queue || []).filter(item => item.source === 'youtube');
   
+  // Update local state and handle player update
   useEffect(() => {
-    // Log whenever current track changes
-    if (currentTrack) {
-      console.log("Current track updated:", currentTrack.id, currentTrack.isPlaying);
-      setLocalIsPlaying(currentTrack.isPlaying);
+    if (!currentTrack) return;
+    
+    console.log("[PlayerControls] Current track updated:", currentTrack.id, currentTrack.isPlaying);
+    
+    // Set flag to indicate we're applying an external update
+    isExternalUpdateRef.current = true;
+    
+    // Update the play/pause state
+    setLocalIsPlaying(currentTrack.isPlaying);
+    
+    // Only perform player updates if the player is available
+    if (playerRef.current && isVideoLoadedRef.current) {
+      console.log(`Applying track position: ${currentTrack.startTime}s`);
+      playerRef.current.seekTo(currentTrack.startTime);
+      setPlaybackPosition(currentTrack.startTime);
     }
+    
+    // Clear the flag after a short delay
+    const timerId = setTimeout(() => {
+      isExternalUpdateRef.current = false;
+    }, 1000);
+    
+    return () => clearTimeout(timerId);
   }, [currentTrack]);
 
-  // Unified playback control function
-  const updateLocalPlayback = (time: number, playing: boolean) => {
-    if (isHandlingAction.current) {
-      console.log("Already handling an action, ignoring");
-      return;
-    }
+  // Toggle playback - unified function to handle all play/pause events
+  const togglePlayback = () => {
+    if (!isVideoLoadedRef.current || !currentTrack) return;
     
-    console.log(`Updating local playback: ${playing ? 'playing' : 'paused'} at ${time}s`);
-    isHandlingAction.current = true;
+    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
+    const newPlayState = !localIsPlaying;
     
-    // Update local state
-    setLocalIsPlaying(playing);
-    if (playerRef.current) {
-      playerRef.current.seekTo(time);
-    }
-    setPlaybackPosition(time);
+    // Set flag to indicate we're handling a controlled state change
+    isControlledChangeRef.current = true;
     
-    // Clear the handling flag after a delay
+    // Update local state first
+    setLocalIsPlaying(newPlayState);
+    
+    // Then send update to others
+    onPlaybackUpdate(
+      currentTime, 
+      newPlayState,
+      currentTrack.id,
+      currentTrack.source
+    );
+    
+    // Clear the flag after a short delay
     setTimeout(() => {
-      isHandlingAction.current = false;
-    }, 500);
-    
-    // Only send updates if we have a current track
-    if (currentTrack) {
-      onPlaybackUpdate(time, playing, currentTrack.id, currentTrack.source);
-    }
+      isControlledChangeRef.current = false;
+    }, 200);
   };
 
-  const handlePlayButtonClick = () => {
-    console.log("Play button clicked");
-    if (!isVideoLoadedRef.current) {
-      console.log("Ignoring play click - video not yet loaded");
-      return;
-    }
-    
-    // Get current time from player
-    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
-    updateLocalPlayback(currentTime, true);
-  };
-  
-  const handlePauseButtonClick = () => {
-    console.log("Pause button clicked");
-    if (!isVideoLoadedRef.current) {
-      console.log("Ignoring pause click - video not yet loaded");
-      return;
-    }
-    
-    // Get current time from player
-    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
-    updateLocalPlayback(currentTime, false);
-  };
-  
-  const handleProgress = (state: { playedSeconds: number }) => {
+  // Handle progress updates
+  const handleProgress = throttle((state: { playedSeconds: number }) => {
     if (!isSeeking) {
-      // Just update local state, don't trigger any network events
       setPlaybackPosition(state.playedSeconds);
     }
-  };
+  }, 100);
 
   const handleDuration = (duration: number) => {
     console.log("Duration updated:", duration);
     setDuration(duration);
   };
 
+  // Handle player events directly
+  const handlePlayerPlay = () => {
+    // Skip if we're processing an external update
+    if (isExternalUpdateRef.current) {
+      console.log("Ignoring YouTube play event (triggered by external update)");
+      return;
+    }
+    
+    // Check if this is a duplicate event (can happen with YouTube iframe API)
+    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
+    const now = Date.now();
+    
+    // Prevent duplicate events within a short timeframe
+    if (
+      lastUpdateSentRef.current.action === 'play' &&
+      Math.abs(lastUpdateSentRef.current.time - currentTime) < 0.5 &&
+      now - lastUpdateSentRef.current.timestamp < 500
+    ) {
+      console.log("Ignoring duplicate play event");
+      return;
+    }
+  
+    // This was a genuine user interaction with the video
+    console.log("User clicked YouTube player to play");
+    
+    // Update local state (but avoid triggering another event)
+    isExternalUpdateRef.current = true;
+    setLocalIsPlaying(true);
+    isExternalUpdateRef.current = false;
+    
+    // Record this update to prevent duplicates
+    lastUpdateSentRef.current = {
+      action: 'play',
+      time: currentTime,
+      timestamp: now
+    };
+    
+    // Send update to others
+    if (currentTrack) {
+      onPlaybackUpdate(currentTime, true, currentTrack.id, currentTrack.source);
+    }
+  };
+  
+  const handlePlayerPause = () => {
+    // Skip if we're processing an external update
+    if (isExternalUpdateRef.current) {
+      console.log("Ignoring YouTube pause event (triggered by external update)");
+      return;
+    }
+    
+    // Check if this is a duplicate event (can happen with YouTube iframe API)
+    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
+    const now = Date.now();
+    
+    // Prevent duplicate events within a short timeframe
+    if (
+      lastUpdateSentRef.current.action === 'pause' &&
+      Math.abs(lastUpdateSentRef.current.time - currentTime) < 0.5 &&
+      now - lastUpdateSentRef.current.timestamp < 500
+    ) {
+      console.log("Ignoring duplicate pause event");
+      return;
+    }
+  
+    // This was a genuine user interaction with the video
+    console.log("User clicked YouTube player to pause");
+    
+    // Update local state (but avoid triggering another event)
+    isExternalUpdateRef.current = true;
+    setLocalIsPlaying(false);
+    isExternalUpdateRef.current = false;
+    
+    // Record this update to prevent duplicates
+    lastUpdateSentRef.current = {
+      action: 'pause',
+      time: currentTime,
+      timestamp: now
+    };
+    
+    // Send update to others
+    if (currentTrack) {
+      onPlaybackUpdate(currentTime, false, currentTrack.id, currentTrack.source);
+    }
+  };
+
+  // Handle custom play/pause button
+  const handlePlayPauseButton = () => {
+    if (!isVideoLoadedRef.current || !currentTrack) return;
+    
+    const newPlayState = !localIsPlaying;
+    const currentTime = playerRef.current ? playerRef.current.getCurrentTime() || 0 : 0;
+    
+    console.log(`Play/Pause button clicked - changing to ${newPlayState ? 'play' : 'pause'}`);
+    
+    // Set flag to indicate we're handling this change
+    isExternalUpdateRef.current = true;
+    
+    // Update local state
+    setLocalIsPlaying(newPlayState);
+    
+    // Send update to other users
+    onPlaybackUpdate(currentTime, newPlayState, currentTrack.id, currentTrack.source);
+    
+    // Record this update to prevent duplicates
+    lastUpdateSentRef.current = {
+      action: newPlayState ? 'play' : 'pause',
+      time: currentTime,
+      timestamp: Date.now()
+    };
+    
+    // Clear the flag after a short delay
+    setTimeout(() => {
+      isExternalUpdateRef.current = false;
+    }, 1000);
+  };
+
+  // Skip to next track in queue
   const skipToNext = () => {
     console.log("Skip to next clicked");
     if (youtubeQueue.length > 0) {
       const nextTrack = youtubeQueue[0];
       
-      // First update local track reference
+      // Reset video loaded flag
       isVideoLoadedRef.current = false;
       
-      // Always start from beginning
+      // Start playing next track
       onPlaybackUpdate(0, true, nextTrack.id, 'youtube');
       
-      // Record this update to prevent loop
-      lastSentUpdateRef.current = {
-        trackId: nextTrack.id,
-        time: 0,
-        isPlaying: true,
-        timestamp: Date.now()
-      };
-      
-      // Remove track from queue after a short delay
+      // Remove from queue after a short delay
       setTimeout(() => {
         const newQueue = [...queue];
         const indexToRemove = newQueue.findIndex(item => 
@@ -151,15 +259,13 @@ export default function PlayerControls({
     }
   };
 
+  // Skip to beginning of current track
   const skipToPrevious = () => {
     console.log("Skipping back to beginning");
-    if (!isVideoLoadedRef.current) {
-      console.log("Ignoring skip - video not yet loaded");
-      return;
-    }
+    if (!isVideoLoadedRef.current || !currentTrack) return;
     
-    // Set position to 0 and keep current playing state
-    updateLocalPlayback(0, localIsPlaying);
+    // Seek to beginning and maintain current play state
+    onPlaybackUpdate(0, localIsPlaying, currentTrack.id, currentTrack.source);
   };
   
   // Format time as minutes:seconds
@@ -177,13 +283,6 @@ export default function PlayerControls({
       ? `https://www.youtube.com/watch?v=${currentTrack.id}` 
       : '';
   };
-
-  // Ensures scrubbing through playback doesn't cause too many events sent
-  const throttledUpdatePlayback = useRef(
-    throttle((time, isPlaying, trackId, source) => {
-      onPlaybackUpdate(time, isPlaying, trackId, source);
-    }, 500) // Half second throttle
-  ).current;
   
   // Handle seeking on progress bar
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,23 +294,16 @@ export default function PlayerControls({
   const handleSeekMouseUp = () => {
     setIsSeeking(false);
     
-    // Only send update if we've fully loaded the video and aren't processing an external update
-    if (!isVideoLoadedRef.current || isProcessingExternalUpdate.current) {
-      console.log("Ignoring seek - video not yet loaded or processing external update");
-      return;
-    }
+    if (!isVideoLoadedRef.current || !currentTrack) return;
     
-    if (playerRef.current && currentTrack) {
-      // Seek locally
-      playerRef.current.seekTo(playbackPosition);
+    if (playerRef.current) {
+      console.log(`Seeking to ${playbackPosition}s`);
       
-      // Record this update
-      lastSentUpdateRef.current = {
-        trackId: currentTrack.id,
-        time: playbackPosition,
-        isPlaying: localIsPlaying,
-        timestamp: Date.now()
-      };
+      // Set flag to indicate we're handling this change
+      isExternalUpdateRef.current = true;
+      
+      // Apply the seek locally
+      playerRef.current.seekTo(playbackPosition);
       
       // Send update to others
       onPlaybackUpdate(
@@ -220,10 +312,22 @@ export default function PlayerControls({
         currentTrack.id,
         currentTrack.source
       );
+      
+      // Record this update to prevent duplicates
+      lastUpdateSentRef.current = {
+        action: 'seek',
+        time: playbackPosition,
+        timestamp: Date.now()
+      };
+      
+      // Clear the flag after a short delay
+      setTimeout(() => {
+        isExternalUpdateRef.current = false;
+      }, 1000);
     }
   };
 
-  // Volume control handlers
+  // Volume control handler
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
@@ -240,43 +344,19 @@ export default function PlayerControls({
     }
   };
   
-  // Check if we need to start playing a track from the queue
+  // Start playing first video in queue if needed
   useEffect(() => {
-    // If we're not currently playing anything but there are videos in the queue
     if (!currentTrack && youtubeQueue.length > 0) {
       console.log('No current track but queue has videos - starting playback');
-      skipToNext(); // Play the first video in the queue
+      skipToNext();
     }
   }, [currentTrack, youtubeQueue.length]);
-
-useEffect(() => {
-  if (!currentTrack || !playerRef.current) return;
-  
-  console.log(`External update received - ID: ${currentTrack.id}, Time: ${currentTrack.startTime}s`);
-  
-  // Wait until player is fully loaded before seeking
-  if (!isVideoLoadedRef.current) {
-    console.log('Video not fully loaded yet, will seek when ready');
-    return;
-  }
-  
-  console.log(`Applying external seek to ${currentTrack.startTime}s`);
-  
-  // Apply the seek with null check
-  if (playerRef.current) {
-    playerRef.current.seekTo(currentTrack.startTime);
-    setPlaybackPosition(currentTrack.startTime);
-  }
-  
-  // Update play state
-  setLocalIsPlaying(currentTrack.isPlaying);
-}, [currentTrack]);
 
   return (
     <div className="relative bg-card overflow-hidden flex flex-col" 
          style={{ height: 'calc(100vh - 187px)' }}>
       
-      {/* Video Container - uses flex-grow to take available space */}
+      {/* Video Container */}
       <div style={{ 
         flexGrow: 1,
         backgroundColor: '#000', 
@@ -296,6 +376,7 @@ useEffect(() => {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
+            {/* The actual YouTube player */}
             <ReactPlayer
               ref={playerRef}
               url={getVideoUrl()}
@@ -307,6 +388,8 @@ useEffect(() => {
               style={{ display: 'block' }}
               onProgress={handleProgress}
               onDuration={handleDuration}
+              onPlay={handlePlayerPlay}
+              onPause={handlePlayerPause}
               onEnded={() => {
                 console.log('Video ended, checking for next in queue');
                 if (youtubeQueue.length > 0) {
@@ -332,13 +415,12 @@ useEffect(() => {
                   }
                 }
                 
-                // Add initial time setup here if needed
-                if (currentTrack && currentTrack.startTime > 0 && playerRef.current) {
-                  playerRef.current.seekTo(currentTrack.startTime);
+                // Initial position setup
+                if (currentTrack && currentTrack.startTime > 0) {
+                  playerRef.current?.seekTo(currentTrack.startTime);
                   setPlaybackPosition(currentTrack.startTime);
                 }
               }}
-              // Removed onPlay/onPause handlers to avoid duplicate events
               config={{
                 playerVars: {
                   modestbranding: 1,
@@ -347,31 +429,13 @@ useEffect(() => {
                   enablejsapi: 1,
                   showinfo: 0,
                   rel: 0,
-                  iv_load_policy: 3, // Hide annotations
-                  playsinline: 1, // Play inline on mobile
-                  fs: 0, // Disable fullscreen button
-                  controls: 0, // Disable controls
-                  disablekb: 1, // Disable keyboard controls
-                },
-                embedOptions: {
-                  // These can help with the loading spinner issue
+                  iv_load_policy: 3,
+                  playsinline: 1,
+                  fs: 0,
                   controls: 0,
-                  autoplay: 1,
-                  showinfo: 0,
-                },
-                  // This helps avoid the loading spinner
-                  onUnstarted: () => {
-                    console.log('Player unstarted - handling automatically');
-                    if (playerRef.current && localIsPlaying) {
-                      try {
-                        playerRef.current.getInternalPlayer().playVideo();
-                      } catch (e) {
-                        console.error('Error playing video in onUnstarted handler:', e);
-                      }
-                    }
-                  }
+                  disablekb: 1,
                 }
-              }
+              }}
             />
           </div>
         ) : (
@@ -380,7 +444,7 @@ useEffect(() => {
           </div>
         )}
         
-        {/* Video title overlay - now positioned above the controls */}
+        {/* Video title overlay */}
         {currentTrack && videoTitle && (
           <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2 transition-opacity">
             <p className="text-sm truncate">{videoTitle}</p>
@@ -388,7 +452,7 @@ useEffect(() => {
         )}
       </div>
       
-      {/* Controls - Fixed part at the bottom with proper background color */}
+      {/* Controls */}
       <div className="flex-none bg-card p-3" style={{ height: '100px' }}>
         {/* Progress bar */}
         <div className="flex items-center mb-4">
@@ -475,7 +539,7 @@ useEffect(() => {
             
             {/* Play/Pause button */}
             <button 
-              onClick={localIsPlaying ? handlePauseButtonClick : handlePlayButtonClick}
+              onClick={handlePlayPauseButton}
               className="bg-primary text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-primary-hover"
               aria-label={localIsPlaying ? "Pause" : "Play"}
             >
